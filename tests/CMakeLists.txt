@@ -28,7 +28,9 @@ add_subdirectory(lib/Catch2)
 set(HEADERS )
 
 set(SOURCES
-	#"${CMAKE_CURRENT_SOURCE_DIR}/
+	"${CMAKE_CURRENT_SOURCE_DIR}/coreTests.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/lexerTests.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/stringInputStreamTests.cpp"
 	"${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
 
 source_group("includes" FILES ${HEADERS})
@@ -66,6 +68,7 @@ if (UNIX)
 endif (UNIX)
 
 add_executable(${TCPP_TESTS_NAME} ${SOURCES} ${HEADERS})
+target_link_libraries(${TCPP_TESTS_NAME} Catch2::Catch2)
 
 include(CTest)
 include(Catch)
