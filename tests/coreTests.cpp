@@ -15,19 +15,13 @@ TEST_CASE("Preprocessor Tests")
 		StringInputStream input(inputSource);
 		Lexer lexer(input);
 
-#if 0
-		while (lexer.HasNextToken())
-		{
-			auto token = lexer.GetNextToken();
-			;
-		}
-#endif
-
 		Preprocessor preprocessor(lexer);
+
 		while (preprocessor.HasNext())
 		{
 			std::cout << preprocessor.Get();
 		}
-		//REQUIRE(preprocessor.Process("") == "");
+
+		std::cout << std::endl;
 	}
 }

@@ -100,6 +100,9 @@ namespace tcpp
 		CLOSE_BRACKET,
 		COMMA,
 		NEWLINE,
+		LESS,
+		GREATER, 
+		QUOTES,
 		KEYWORD,
 		END,
 		UNKNOWN
@@ -225,10 +228,17 @@ namespace tcpp
 
 			/// \note join lines that were splitted with backslash sign
 			std::string::size_type pos = 0;
-			while (((pos = mCurrLine.find_first_of('\\')) != std::string::npos) && mpInputStream->HasNextLine())
+			while (((pos = mCurrLine.find_first_of('\\')) != std::string::npos))
 			{
-				mCurrLine.replace(pos, std::string::npos, mpInputStream->ReadLine());
-				++mCurrLineIndex;
+				if (mpInputStream->HasNextLine())
+				{
+					mCurrLine.replace(pos ? (pos - 1) : 0, std::string::npos, mpInputStream->ReadLine());
+					++mCurrLineIndex;
+
+					continue;
+				}
+
+				mCurrLine.erase(mCurrLine.begin() + pos, mCurrLine.end());
 			}
 
 			// remove redundant whitespaces
@@ -276,6 +286,8 @@ namespace tcpp
 			"default", "goto", "sizeof", "volatile",
 			"do", "if", "static", "while"
 		};
+
+		static const std::string separators = ",()<>\"";
 
 		std::string currStr = "";
 
@@ -374,19 +386,28 @@ namespace tcpp
 
 			inputLine.erase(0, 1);
 
-			if ((ch == ',' || ch == '(' || ch == ')') && !currStr.empty())
+			if ((separators.find_first_of(ch) != std::string::npos))
 			{
-				return { E_TOKEN_TYPE::BLOB, currStr, mCurrLineIndex }; // flush current blob
-			}
+				if (!currStr.empty())
+				{
+					return { E_TOKEN_TYPE::BLOB, currStr, mCurrLineIndex }; // flush current blob
+				}
 
-			switch (ch)
-			{
-				case ',':
-					return { E_TOKEN_TYPE::COMMA, ",", mCurrLineIndex };
-				case '(':
-					return { E_TOKEN_TYPE::OPEN_BRACKET, "(", mCurrLineIndex };
-				case ')':
-					return { E_TOKEN_TYPE::CLOSE_BRACKET, ")", mCurrLineIndex };
+				switch (ch)
+				{
+					case ',':
+						return { E_TOKEN_TYPE::COMMA, ",", mCurrLineIndex };
+					case '(':
+						return { E_TOKEN_TYPE::OPEN_BRACKET, "(", mCurrLineIndex };
+					case ')':
+						return { E_TOKEN_TYPE::CLOSE_BRACKET, ")", mCurrLineIndex };
+					case '<':
+						return { E_TOKEN_TYPE::LESS, "<", mCurrLineIndex };
+					case '>':
+						return { E_TOKEN_TYPE::GREATER, ">", mCurrLineIndex };
+					case '\"':
+						return { E_TOKEN_TYPE::QUOTES, "\"", mCurrLineIndex };
+				}
 			}
 
 			currStr.push_back(ch);

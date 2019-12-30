@@ -84,12 +84,15 @@ TEST_CASE("Lexer Tests")
 
 	SECTION("TestGetNextToken_PassStreamWithSeparators_ReturnsTheirTokens")
 	{
-		MockInputStream input({ ",()"});
+		MockInputStream input({ ",()<>\""});
 		Lexer lexer(input);
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::COMMA);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::OPEN_BRACKET);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::CLOSE_BRACKET);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::LESS);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::GREATER);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::QUOTES);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
 
