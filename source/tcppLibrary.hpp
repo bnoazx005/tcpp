@@ -143,6 +143,8 @@ namespace tcpp
 			bool HasNextToken() const TCPP_NOEXCEPT;
 		private:
 			TToken _scanTokens(std::string& inputLine) const TCPP_NOEXCEPT;
+
+			std::string _removeSingleLineComment(const std::string& line) const TCPP_NOEXCEPT;
 		private:
 			static const TToken mEOFToken;
 
@@ -223,7 +225,7 @@ namespace tcpp
 				return mEOFToken;
 			}
 
-			mCurrLine = mpInputStream->ReadLine();
+			mCurrLine = _removeSingleLineComment(mpInputStream->ReadLine());
 			++mCurrLineIndex;
 
 			/// \note join lines that were splitted with backslash sign
@@ -232,7 +234,7 @@ namespace tcpp
 			{
 				if (mpInputStream->HasNextLine())
 				{
-					mCurrLine.replace(pos ? (pos - 1) : 0, std::string::npos, mpInputStream->ReadLine());
+					mCurrLine.replace(pos ? (pos - 1) : 0, std::string::npos, _removeSingleLineComment(mpInputStream->ReadLine()));
 					++mCurrLineIndex;
 
 					continue;
@@ -252,6 +254,8 @@ namespace tcpp
 				}), mCurrLine.end());
 			}
 		}
+
+		// \todo add removing of multiline comments
 
 		return _scanTokens(mCurrLine);
 	}
@@ -420,6 +424,12 @@ namespace tcpp
 		}
 
 		return mEOFToken;
+	}
+
+	std::string Lexer::_removeSingleLineComment(const std::string& line) const TCPP_NOEXCEPT
+	{
+		std::string::size_type pos = line.find("//");
+		return (pos == std::string::npos) ? line : line.substr(0, pos);
 	}
 
 
