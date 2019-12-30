@@ -11,7 +11,7 @@ TEST_CASE("Preprocessor Tests")
 
 	SECTION("TestProcess_PassSourceWithoutMacros_ReturnsEquaivalentSource")
 	{
-		std::string inputSource = "void main()\n{\n\treturn 42;\n}";
+		std::string inputSource = "void main/* this is a comment*/(/*void*/)\n{\n\treturn/*   */ 42;\n}";
 		StringInputStream input(inputSource);
 		Lexer lexer(input);
 

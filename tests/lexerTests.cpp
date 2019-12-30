@@ -134,4 +134,36 @@ TEST_CASE("Lexer Tests")
 		}
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
+
+	SECTION("TestGetNextToken_PassStreamWithSimpleMultilineComments_ReturnsSPACEAndENDTokens")
+	{
+		MockInputStream input({ "/*test\n"," this thing skip */ " });
+		Lexer lexer(input);
+
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
+	}
+
+	SECTION("TestGetNextToken_PassStreamWithNestedMultilineComments_ReturnsSPACEAndENDTokens")
+	{
+		MockInputStream input({ "/*test\n"," /*\n", " */ /*test*/ this thing skip */ " });
+		Lexer lexer(input);
+
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
+	}
+
+	SECTION("TestGetNextToken_PassStreamWithNestedMultilineComments_ReturnsSPACEAndENDTokens")
+	{
+		// \note without comments the string looks like that "id  id2 "
+		MockInputStream input({ "id /*test\n","/*\n", "*/ id2", "/*test this thing skip */ " });
+		Lexer lexer(input);
+
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
+	}
 }

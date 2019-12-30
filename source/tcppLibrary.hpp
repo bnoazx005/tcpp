@@ -145,6 +145,10 @@ namespace tcpp
 			TToken _scanTokens(std::string& inputLine) const TCPP_NOEXCEPT;
 
 			std::string _removeSingleLineComment(const std::string& line) const TCPP_NOEXCEPT;
+
+			std::string _removeMultiLineComments(const std::string& currInput) TCPP_NOEXCEPT;
+
+			std::string _requestSourceLine() TCPP_NOEXCEPT;
 		private:
 			static const TToken mEOFToken;
 
@@ -220,43 +224,14 @@ namespace tcpp
 	{
 		if (mCurrLine.empty())
 		{
-			if (!mpInputStream->HasNextLine())
+			// \note if it's still empty then we've reached the end of the source
+			if ((mCurrLine = _requestSourceLine()).empty())
 			{
 				return mEOFToken;
 			}
-
-			mCurrLine = _removeSingleLineComment(mpInputStream->ReadLine());
-			++mCurrLineIndex;
-
-			/// \note join lines that were splitted with backslash sign
-			std::string::size_type pos = 0;
-			while (((pos = mCurrLine.find_first_of('\\')) != std::string::npos))
-			{
-				if (mpInputStream->HasNextLine())
-				{
-					mCurrLine.replace(pos ? (pos - 1) : 0, std::string::npos, _removeSingleLineComment(mpInputStream->ReadLine()));
-					++mCurrLineIndex;
-
-					continue;
-				}
-
-				mCurrLine.erase(mCurrLine.begin() + pos, mCurrLine.end());
-			}
-
-			// remove redundant whitespaces
-			{
-				bool isPrevChWhitespace = false;
-				mCurrLine.erase(std::remove_if(mCurrLine.begin(), mCurrLine.end(), [&isPrevChWhitespace](char ch)
-				{
-					bool shouldReplace = std::isspace(ch) && isPrevChWhitespace;
-					isPrevChWhitespace = std::isspace(ch);
-					return shouldReplace;
-				}), mCurrLine.end());
-			}
 		}
 
-		// \todo add removing of multiline comments
-
+		mCurrLine = _removeMultiLineComments(mCurrLine);
 		return _scanTokens(mCurrLine);
 	}
 
@@ -430,6 +405,84 @@ namespace tcpp
 	{
 		std::string::size_type pos = line.find("//");
 		return (pos == std::string::npos) ? line : line.substr(0, pos);
+	}
+
+	std::string Lexer::_removeMultiLineComments(const std::string& currInput) TCPP_NOEXCEPT
+	{
+		std::string input = currInput;
+
+		// \note here below all states of DFA are placed
+		std::function<std::string(std::string&)> enterCommentBlock = [&enterCommentBlock, this](std::string& input)
+		{
+			input.erase(0, 2); // \note remove /*
+
+			while (input.rfind("*/", 0) != 0 && !input.empty())
+			{
+				input.erase(0, 1);
+
+				if (input.rfind("/*", 0) == 0)
+				{
+					input = enterCommentBlock(input);
+				}
+
+				if (input.empty())
+				{
+					input = _requestSourceLine();
+				}
+			}
+
+			input.erase(0, 2); // \note remove */
+
+			return input;
+		};
+
+		std::string::size_type pos = input.find("/*");
+		if (pos != std::string::npos)
+		{
+			std::string restStr = input.substr(pos, std::string::npos);
+			return input.substr(0, pos) + enterCommentBlock(restStr);
+		}
+
+		return input;
+	}
+
+	std::string Lexer::_requestSourceLine() TCPP_NOEXCEPT
+	{
+		if (!mpInputStream->HasNextLine())
+		{
+			return "";
+		}
+
+		std::string sourceLine = _removeSingleLineComment(mpInputStream->ReadLine());
+		++mCurrLineIndex;
+
+		/// \note join lines that were splitted with backslash sign
+		std::string::size_type pos = 0;
+		while (((pos = sourceLine.find_first_of('\\')) != std::string::npos))
+		{
+			if (mpInputStream->HasNextLine())
+			{
+				sourceLine.replace(pos ? (pos - 1) : 0, std::string::npos, _removeSingleLineComment(mpInputStream->ReadLine()));
+				++mCurrLineIndex;
+
+				continue;
+			}
+
+			sourceLine.erase(sourceLine.begin() + pos, sourceLine.end());
+		}
+
+		// remove redundant whitespaces
+		{
+			bool isPrevChWhitespace = false;
+			sourceLine.erase(std::remove_if(sourceLine.begin(), sourceLine.end(), [&isPrevChWhitespace](char ch)
+			{
+				bool shouldReplace = std::isspace(ch) && isPrevChWhitespace;
+				isPrevChWhitespace = std::isspace(ch);
+				return shouldReplace;
+			}), sourceLine.end());
+		}
+
+		return sourceLine;
 	}
 
 
