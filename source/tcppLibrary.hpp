@@ -161,6 +161,22 @@ namespace tcpp
 
 
 	/*!
+		struct TMacroDesc
+
+		\brief The type describes a single macro definition's description
+	*/
+
+	typedef struct TMacroDesc
+	{
+		std::string mName;
+
+		std::vector<std::string> mArgsNames;
+
+		std::vector<TToken> mValue;
+	} TMacroDesc, *TMacroDescPtr;
+
+
+	/*!
 		class Preprocessor
 
 		\brief The class implements main functionality of C preprocessor. To preprocess
@@ -172,22 +188,27 @@ namespace tcpp
 	{
 		public:
 			using TOnErrorCallback = std::function<void()>;
+			using TSymTable = std::vector<TMacroDesc>;
 		public:
 			Preprocessor() TCPP_NOEXCEPT = delete;
 			Preprocessor(const Preprocessor&) TCPP_NOEXCEPT = delete;
 			Preprocessor(Lexer& lexer, const TOnErrorCallback& onErrorCallback = {}) TCPP_NOEXCEPT;
 			~Preprocessor() TCPP_NOEXCEPT = default;
 
-			std::string Get() TCPP_NOEXCEPT;
-
-			bool HasNext() TCPP_NOEXCEPT;
-
-			bool MoveNext() TCPP_NOEXCEPT;
+			std::string Process() TCPP_NOEXCEPT;
 
 			Preprocessor& operator= (const Preprocessor&) TCPP_NOEXCEPT = delete;
 		private:
+			void _createMacroDefinition() TCPP_NOEXCEPT;
+			void _removeMacroDefinition(const std::string& macroName) TCPP_NOEXCEPT;
+
+			std::string _expandMacroDefinition(const TMacroDesc& macroDesc) TCPP_NOEXCEPT;
+
+			void _expect(const E_TOKEN_TYPE& expectedType, const E_TOKEN_TYPE& actualType) TCPP_NOEXCEPT;
+		private:
 			Lexer* mpLexer;
 			TOnErrorCallback mOnErrorCallback;
+			TSymTable mSymTable;
 	};
 
 
@@ -491,21 +512,132 @@ namespace tcpp
 	{
 	}
 
-	std::string Preprocessor::Get() TCPP_NOEXCEPT
+	std::string Preprocessor::Process() TCPP_NOEXCEPT
 	{
 		TCPP_ASSERT(mpLexer);
-		return mpLexer->GetNextToken().mRawView;
+
+		std::string processedStr;
+
+		// \note first stage of preprocessing, expand macros and include directives
+		while (mpLexer->HasNextToken())
+		{
+			auto currToken = mpLexer->GetNextToken();
+
+			switch (currToken.mType)
+			{
+				case E_TOKEN_TYPE::DEFINE:
+					_createMacroDefinition();
+					break;
+				case E_TOKEN_TYPE::UNDEF:
+					currToken = mpLexer->GetNextToken();
+					_expect(E_TOKEN_TYPE::IDENTIFIER, currToken.mType);
+					_removeMacroDefinition(currToken.mRawView);
+					break;
+				case E_TOKEN_TYPE::INCLUDE:
+					break;
+				case E_TOKEN_TYPE::IDENTIFIER: // \note try to expand some macro here
+					{
+						auto iter = std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&currToken](auto&& item) 
+						{
+							return item.mName == currToken.mRawView;
+						});
+
+						if (iter != mSymTable.cend())
+						{
+							processedStr.append(_expandMacroDefinition(*iter));
+						}
+					}
+					break;
+				default:
+					processedStr.append(currToken.mRawView);
+					break;
+			}
+		}
+
+		return processedStr;
 	}
 
-	bool Preprocessor::HasNext() TCPP_NOEXCEPT
+	void Preprocessor::_createMacroDefinition() TCPP_NOEXCEPT
 	{
-		TCPP_ASSERT(mpLexer);
-		return mpLexer->HasNextToken();
+		TMacroDesc macroDesc;
+
+		auto currToken = mpLexer->GetNextToken();
+		_expect(E_TOKEN_TYPE::SPACE, currToken.mType);
+
+		currToken = mpLexer->GetNextToken();
+		_expect(E_TOKEN_TYPE::IDENTIFIER, currToken.mType);
+		
+		macroDesc.mName = currToken.mRawView;
+
+		currToken = mpLexer->GetNextToken();
+		switch (currToken.mType)
+		{
+			case E_TOKEN_TYPE::SPACE:	// object like macro
+				{
+					while ((currToken = mpLexer->GetNextToken()).mType != E_TOKEN_TYPE::NEWLINE)
+					{
+						macroDesc.mValue.push_back(currToken);
+					}
+
+					_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
+				}
+				break;
+			case E_TOKEN_TYPE::OPEN_BRACKET: // function line macro
+				{
+					TCPP_ASSERT(false);
+				}
+				break;
+			default:
+				mOnErrorCallback();
+				break;
+		}
+
+		if (std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&macroDesc](auto&& item) { return item.mName == macroDesc.mName; }) != mSymTable.cend())
+		{
+			mOnErrorCallback();
+			return;
+		}
+
+		mSymTable.push_back(macroDesc);
 	}
 
-	bool Preprocessor::MoveNext() TCPP_NOEXCEPT
+	void Preprocessor::_removeMacroDefinition(const std::string& macroName) TCPP_NOEXCEPT
 	{
-		return HasNext();
+		auto iter = std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&macroName](auto&& item) { return item.mName == macroName; });
+		if (iter == mSymTable.cend())
+		{
+			mOnErrorCallback();
+			return;
+		}
+
+		mSymTable.erase(iter);
+
+		auto currToken = mpLexer->GetNextToken();
+		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
+	}
+
+	std::string Preprocessor::_expandMacroDefinition(const TMacroDesc& macroDesc) TCPP_NOEXCEPT
+	{
+		auto currToken = mpLexer->GetNextToken();
+
+		if (macroDesc.mArgsNames.empty())
+		{
+
+			
+			return "";
+		}
+
+		return "";
+	}
+
+	void Preprocessor::_expect(const E_TOKEN_TYPE& expectedType, const E_TOKEN_TYPE& actualType) TCPP_NOEXCEPT
+	{
+		if (expectedType == actualType)
+		{
+			return;
+		}
+
+		mOnErrorCallback();
 	}
 
 #endif

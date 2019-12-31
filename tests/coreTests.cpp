@@ -8,6 +8,10 @@ using namespace tcpp;
 
 TEST_CASE("Preprocessor Tests")
 {
+	auto errorCallback = []()
+	{
+		REQUIRE(false);
+	};
 
 	SECTION("TestProcess_PassSourceWithoutMacros_ReturnsEquaivalentSource")
 	{
@@ -15,13 +19,17 @@ TEST_CASE("Preprocessor Tests")
 		StringInputStream input(inputSource);
 		Lexer lexer(input);
 
-		Preprocessor preprocessor(lexer);
+		Preprocessor preprocessor(lexer, errorCallback);
+		REQUIRE(!preprocessor.Process().empty());
+	}
 
-		while (preprocessor.HasNext())
-		{
-			std::cout << preprocessor.Get();
-		}
+	SECTION("TestProcess_PassSourceWithSimpleMacro_ReturnsSourceWithExpandedMacro")
+	{
+		std::string inputSource = "#define VALUE 42\n void main()\n{\n\treturn VALUE;\n}";
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
 
-		std::cout << std::endl;
+		Preprocessor preprocessor(lexer, errorCallback);
+		std::cout << preprocessor.Process() << std::endl;
 	}
 }
