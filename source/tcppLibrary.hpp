@@ -566,6 +566,10 @@ namespace tcpp
 						{
 							mpLexer->AppendFront(_expandMacroDefinition(*iter));
 						}
+						else
+						{
+							processedStr.append(currToken.mRawView);
+						}
 					}
 					break;
 				default:
@@ -589,22 +593,48 @@ namespace tcpp
 		
 		macroDesc.mName = currToken.mRawView;
 
+		auto extractValue = [this](TMacroDesc& desc, Lexer& lexer)
+		{
+			TToken currToken;
+
+			while ((currToken = lexer.GetNextToken()).mType != E_TOKEN_TYPE::NEWLINE)
+			{
+				desc.mValue.push_back(currToken);
+			}
+
+			_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
+		};
+
 		currToken = mpLexer->GetNextToken();
 		switch (currToken.mType)
 		{
 			case E_TOKEN_TYPE::SPACE:	// object like macro
-				{
-					while ((currToken = mpLexer->GetNextToken()).mType != E_TOKEN_TYPE::NEWLINE)
-					{
-						macroDesc.mValue.push_back(currToken);
-					}
-
-					_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
-				}
+				extractValue(macroDesc, *mpLexer);
 				break;
 			case E_TOKEN_TYPE::OPEN_BRACKET: // function line macro
 				{
-					TCPP_ASSERT(false);
+					// \note parse arguments
+					while (true)
+					{
+						while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
+
+						_expect(E_TOKEN_TYPE::IDENTIFIER, currToken.mType);
+						macroDesc.mArgsNames.push_back(currToken.mRawView);
+
+						while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE);
+						if (currToken.mType == E_TOKEN_TYPE::CLOSE_BRACKET)
+						{
+							break;
+						}
+
+						_expect(E_TOKEN_TYPE::COMMA, currToken.mType);
+					}
+
+					currToken = mpLexer->GetNextToken();
+					_expect(E_TOKEN_TYPE::SPACE, currToken.mType);
+
+					// \note parse macro's value
+					extractValue(macroDesc, *mpLexer);
 				}
 				break;
 			default:
