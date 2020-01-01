@@ -24,6 +24,7 @@
 #include <string>
 #include <functional>
 #include <vector>
+#include <list>
 #include <algorithm>
 #include <tuple>
 #include <unordered_set>
@@ -133,6 +134,8 @@ namespace tcpp
 
 	class Lexer
 	{
+		private:
+			using TTokensQueue = std::list<TToken>;
 		public:
 			Lexer() TCPP_NOEXCEPT = delete;
 			Lexer(IInputStream& inputStream) TCPP_NOEXCEPT;
@@ -141,6 +144,8 @@ namespace tcpp
 			TToken GetNextToken() TCPP_NOEXCEPT;
 
 			bool HasNextToken() const TCPP_NOEXCEPT;
+
+			void AppendFront(const std::vector<TToken>& tokens) TCPP_NOEXCEPT;
 		private:
 			TToken _scanTokens(std::string& inputLine) const TCPP_NOEXCEPT;
 
@@ -151,6 +156,8 @@ namespace tcpp
 			std::string _requestSourceLine() TCPP_NOEXCEPT;
 		private:
 			static const TToken mEOFToken;
+			
+			TTokensQueue mTokensQueue;
 
 			IInputStream* mpInputStream;
 
@@ -202,7 +209,7 @@ namespace tcpp
 			void _createMacroDefinition() TCPP_NOEXCEPT;
 			void _removeMacroDefinition(const std::string& macroName) TCPP_NOEXCEPT;
 
-			std::string _expandMacroDefinition(const TMacroDesc& macroDesc) TCPP_NOEXCEPT;
+			std::vector<TToken> _expandMacroDefinition(const TMacroDesc& macroDesc) TCPP_NOEXCEPT;
 
 			void _expect(const E_TOKEN_TYPE& expectedType, const E_TOKEN_TYPE& actualType) TCPP_NOEXCEPT;
 		private:
@@ -243,6 +250,14 @@ namespace tcpp
 
 	TToken Lexer::GetNextToken() TCPP_NOEXCEPT
 	{
+		if (!mTokensQueue.empty())
+		{
+			auto currToken = mTokensQueue.front();
+			mTokensQueue.pop_front();
+
+			return currToken;
+		}
+
 		if (mCurrLine.empty())
 		{
 			// \note if it's still empty then we've reached the end of the source
@@ -259,6 +274,11 @@ namespace tcpp
 	bool Lexer::HasNextToken() const TCPP_NOEXCEPT
 	{
 		return mpInputStream->HasNextLine() || !mCurrLine.empty();
+	}
+
+	void Lexer::AppendFront(const std::vector<TToken>& tokens) TCPP_NOEXCEPT
+	{
+		mTokensQueue.insert(mTokensQueue.begin(), tokens.begin(), tokens.end());
 	}
 
 	TToken Lexer::_scanTokens(std::string& inputLine) const TCPP_NOEXCEPT
@@ -544,7 +564,7 @@ namespace tcpp
 
 						if (iter != mSymTable.cend())
 						{
-							processedStr.append(_expandMacroDefinition(*iter));
+							mpLexer->AppendFront(_expandMacroDefinition(*iter));
 						}
 					}
 					break;
@@ -616,18 +636,14 @@ namespace tcpp
 		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
 	}
 
-	std::string Preprocessor::_expandMacroDefinition(const TMacroDesc& macroDesc) TCPP_NOEXCEPT
+	std::vector<TToken> Preprocessor::_expandMacroDefinition(const TMacroDesc& macroDesc) TCPP_NOEXCEPT
 	{
-		auto currToken = mpLexer->GetNextToken();
-
 		if (macroDesc.mArgsNames.empty())
 		{
-
-			
-			return "";
+			return macroDesc.mValue;
 		}
 
-		return "";
+		return {};
 	}
 
 	void Preprocessor::_expect(const E_TOKEN_TYPE& expectedType, const E_TOKEN_TYPE& actualType) TCPP_NOEXCEPT

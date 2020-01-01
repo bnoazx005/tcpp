@@ -166,4 +166,22 @@ TEST_CASE("Lexer Tests")
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
+
+	SECTION("TestAppendFront_PassFewTokensToExistingOnes_ReturnsAppendedFirstlyThenRest")
+	{
+		MockInputStream input({ "line", "_macro", "lucky_42" });
+		Lexer lexer(input);
+
+		lexer.AppendFront({ { E_TOKEN_TYPE::BLOB }, { E_TOKEN_TYPE::ELIF } });
+
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::BLOB);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::ELIF);
+
+		for (short i = 0; i < 3; ++i)
+		{
+			REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
+		}
+
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
+	}
 }
