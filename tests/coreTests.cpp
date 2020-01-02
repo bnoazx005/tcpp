@@ -49,10 +49,17 @@ TEST_CASE("Preprocessor Tests")
 		StringInputStream input(inputSource);
 		Lexer lexer(input);
 
-		Preprocessor preprocessor(lexer, errorCallback, [](const std::string& path, bool isSystem)
+		const std::tuple<std::string, bool> expectedPaths[]{ { "system", true }, { "non_system_path", false } };
+		short currExpectedPathIndex = 0;
+
+		Preprocessor preprocessor(lexer, errorCallback, [&input, &currExpectedPathIndex, &expectedPaths](const std::string& path, bool isSystem)
 		{
-			return path;
+			auto expectedResultPair = expectedPaths[currExpectedPathIndex++];
+
+			REQUIRE(path == std::get<std::string>(expectedResultPair));
+			REQUIRE(isSystem == std::get<bool>(expectedResultPair));
+			return &input;
 		});
-		std::cout << preprocessor.Process() << std::endl;
+		preprocessor.Process();
 	}
 }

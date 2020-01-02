@@ -69,7 +69,7 @@ namespace tcpp
 		class StringInputStream
 
 		\brief The class is the simplest implementation of the input stream, which
-		is a simple string 
+		is a simple string
 	*/
 
 	class StringInputStream : public IInputStream
@@ -87,7 +87,7 @@ namespace tcpp
 	};
 
 
-	enum class E_TOKEN_TYPE: unsigned int
+	enum class E_TOKEN_TYPE : unsigned int
 	{
 		IDENTIFIER,
 		DEFINE,
@@ -104,7 +104,7 @@ namespace tcpp
 		COMMA,
 		NEWLINE,
 		LESS,
-		GREATER, 
+		GREATER,
 		QUOTES,
 		KEYWORD,
 		END,
@@ -167,7 +167,7 @@ namespace tcpp
 			IInputStream* _getActiveStream() const TCPP_NOEXCEPT;
 		private:
 			static const TToken mEOFToken;
-			
+
 			TTokensQueue mTokensQueue;
 
 			std::string mCurrLine;
@@ -206,7 +206,7 @@ namespace tcpp
 	{
 		public:
 			using TOnErrorCallback = std::function<void()>;
-			using TOnIncludeCallback = std::function<std::string(const std::string&, bool)>;
+			using TOnIncludeCallback = std::function<IInputStream*(const std::string&, bool)>;
 			using TSymTable = std::vector<TMacroDesc>;
 			using TContextStack = std::list<std::string>;
 		public:
@@ -226,7 +226,7 @@ namespace tcpp
 
 			void _expect(const E_TOKEN_TYPE& expectedType, const E_TOKEN_TYPE& actualType) TCPP_NOEXCEPT;
 
-			std::string _processInclusion() TCPP_NOEXCEPT;
+			void _processInclusion() TCPP_NOEXCEPT;
 		private:
 			Lexer* mpLexer;
 			TOnErrorCallback mOnErrorCallback;
@@ -236,11 +236,11 @@ namespace tcpp
 	};
 
 
-///< implementation of the library is placed below
+	///< implementation of the library is placed below
 #if defined(TCPP_IMPLEMENTATION)
 
 	StringInputStream::StringInputStream(const std::string& source) TCPP_NOEXCEPT:
-		IInputStream(), mpSourceStr(&source), mPos(0)
+	IInputStream(), mpSourceStr(&source), mPos(0)
 	{
 	}
 
@@ -261,7 +261,7 @@ namespace tcpp
 	const TToken Lexer::mEOFToken = { E_TOKEN_TYPE::END };
 
 	Lexer::Lexer(IInputStream& inputStream) TCPP_NOEXCEPT:
-		mCurrLine(), mCurrLineIndex(0)
+	mCurrLine(), mCurrLineIndex(0)
 	{
 		PushStream(inputStream);
 	}
@@ -401,8 +401,7 @@ namespace tcpp
 				do
 				{
 					keyword.push_back(ch);
-				} 
-				while ((i < inputLine.length()) && std::isalpha(ch = inputLine[++i]));
+				} while ((i < inputLine.length()) && std::isalpha(ch = inputLine[++i]));
 
 				if (keywordsMap.find(keyword) != keywordsMap.cend())
 				{
@@ -412,7 +411,7 @@ namespace tcpp
 
 				ch = savedCh; // restore previous state
 			}
-			
+
 			if (ch == '_' || std::isalpha(ch)) ///< \note parse identifier
 			{
 				// flush current blob
@@ -427,8 +426,7 @@ namespace tcpp
 				{
 					identifier.push_back(ch);
 					inputLine.erase(0, 1);
-				}
-				while (!inputLine.empty() && (std::isalnum(ch = inputLine.front()) || (ch == '_')));
+				} while (!inputLine.empty() && (std::isalnum(ch = inputLine.front()) || (ch == '_')));
 
 				return { E_TOKEN_TYPE::IDENTIFIER, identifier, mCurrLineIndex };
 			}
@@ -465,7 +463,7 @@ namespace tcpp
 		}
 
 		PopStream();
-		
+
 		//\note try to continue preprocessing if there is at least one input stream
 		if (!mStreamsContext.empty())
 		{
@@ -565,18 +563,18 @@ namespace tcpp
 	{
 		switch (ch)
 		{
-			case ',':
-				return { E_TOKEN_TYPE::COMMA, ",", mCurrLineIndex };
-			case '(':
-				return { E_TOKEN_TYPE::OPEN_BRACKET, "(", mCurrLineIndex };
-			case ')':
-				return { E_TOKEN_TYPE::CLOSE_BRACKET, ")", mCurrLineIndex };
-			case '<':
-				return { E_TOKEN_TYPE::LESS, "<", mCurrLineIndex };
-			case '>':
-				return { E_TOKEN_TYPE::GREATER, ">", mCurrLineIndex };
-			case '\"':
-				return { E_TOKEN_TYPE::QUOTES, "\"", mCurrLineIndex };
+		case ',':
+			return { E_TOKEN_TYPE::COMMA, ",", mCurrLineIndex };
+		case '(':
+			return { E_TOKEN_TYPE::OPEN_BRACKET, "(", mCurrLineIndex };
+		case ')':
+			return { E_TOKEN_TYPE::CLOSE_BRACKET, ")", mCurrLineIndex };
+		case '<':
+			return { E_TOKEN_TYPE::LESS, "<", mCurrLineIndex };
+		case '>':
+			return { E_TOKEN_TYPE::GREATER, ">", mCurrLineIndex };
+		case '\"':
+			return { E_TOKEN_TYPE::QUOTES, "\"", mCurrLineIndex };
 		}
 
 		return mEOFToken;
@@ -606,48 +604,48 @@ namespace tcpp
 
 			switch (currToken.mType)
 			{
-				case E_TOKEN_TYPE::DEFINE:
-					_createMacroDefinition();
-					break;
-				case E_TOKEN_TYPE::UNDEF:
-					currToken = mpLexer->GetNextToken();
-					_expect(E_TOKEN_TYPE::IDENTIFIER, currToken.mType);
-					_removeMacroDefinition(currToken.mRawView);
-					break;
-				case E_TOKEN_TYPE::INCLUDE:
-					_processInclusion();
-					break;
-				case E_TOKEN_TYPE::IDENTIFIER: // \note try to expand some macro here
-					{
-						auto iter = std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&currToken](auto&& item) 
-						{
-							return item.mName == currToken.mRawView;
-						});
+			case E_TOKEN_TYPE::DEFINE:
+				_createMacroDefinition();
+				break;
+			case E_TOKEN_TYPE::UNDEF:
+				currToken = mpLexer->GetNextToken();
+				_expect(E_TOKEN_TYPE::IDENTIFIER, currToken.mType);
+				_removeMacroDefinition(currToken.mRawView);
+				break;
+			case E_TOKEN_TYPE::INCLUDE:
+				_processInclusion();
+				break;
+			case E_TOKEN_TYPE::IDENTIFIER: // \note try to expand some macro here
+			{
+				auto iter = std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&currToken](auto&& item)
+				{
+					return item.mName == currToken.mRawView;
+				});
 
-						auto contextIter = std::find_if(mContextStack.cbegin(), mContextStack.cend(), [&currToken](auto&& item)
-						{
-							return item == currToken.mRawView;
-						});
+				auto contextIter = std::find_if(mContextStack.cbegin(), mContextStack.cend(), [&currToken](auto&& item)
+				{
+					return item == currToken.mRawView;
+				});
 
-						if (iter != mSymTable.cend() && contextIter == mContextStack.cend())
-						{
-							mpLexer->AppendFront(_expandMacroDefinition(*iter));
-						}
-						else
-						{
-							processedStr.append(currToken.mRawView);
-						}
-					}
-					break;
-				case E_TOKEN_TYPE::REJECT_MACRO:
-					mContextStack.erase(std::remove_if(mContextStack.begin(), mContextStack.end(), [&currToken](auto&& item)
-					{
-						return item == currToken.mRawView;
-					}), mContextStack.end());
-					break;
-				default:
+				if (iter != mSymTable.cend() && contextIter == mContextStack.cend())
+				{
+					mpLexer->AppendFront(_expandMacroDefinition(*iter));
+				}
+				else
+				{
 					processedStr.append(currToken.mRawView);
-					break;
+				}
+			}
+			break;
+			case E_TOKEN_TYPE::REJECT_MACRO:
+				mContextStack.erase(std::remove_if(mContextStack.begin(), mContextStack.end(), [&currToken](auto&& item)
+				{
+					return item == currToken.mRawView;
+				}), mContextStack.end());
+				break;
+			default:
+				processedStr.append(currToken.mRawView);
+				break;
 			}
 		}
 
@@ -663,7 +661,7 @@ namespace tcpp
 
 		currToken = mpLexer->GetNextToken();
 		_expect(E_TOKEN_TYPE::IDENTIFIER, currToken.mType);
-		
+
 		macroDesc.mName = currToken.mRawView;
 
 		auto extractValue = [this](TMacroDesc& desc, Lexer& lexer)
@@ -681,38 +679,38 @@ namespace tcpp
 		currToken = mpLexer->GetNextToken();
 		switch (currToken.mType)
 		{
-			case E_TOKEN_TYPE::SPACE:	// object like macro
-				extractValue(macroDesc, *mpLexer);
-				break;
-			case E_TOKEN_TYPE::OPEN_BRACKET: // function line macro
+		case E_TOKEN_TYPE::SPACE:	// object like macro
+			extractValue(macroDesc, *mpLexer);
+			break;
+		case E_TOKEN_TYPE::OPEN_BRACKET: // function line macro
+		{
+			// \note parse arguments
+			while (true)
+			{
+				while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
+
+				_expect(E_TOKEN_TYPE::IDENTIFIER, currToken.mType);
+				macroDesc.mArgsNames.push_back(currToken.mRawView);
+
+				while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE);
+				if (currToken.mType == E_TOKEN_TYPE::CLOSE_BRACKET)
 				{
-					// \note parse arguments
-					while (true)
-					{
-						while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
-
-						_expect(E_TOKEN_TYPE::IDENTIFIER, currToken.mType);
-						macroDesc.mArgsNames.push_back(currToken.mRawView);
-
-						while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE);
-						if (currToken.mType == E_TOKEN_TYPE::CLOSE_BRACKET)
-						{
-							break;
-						}
-
-						_expect(E_TOKEN_TYPE::COMMA, currToken.mType);
-					}
-
-					currToken = mpLexer->GetNextToken();
-					_expect(E_TOKEN_TYPE::SPACE, currToken.mType);
-
-					// \note parse macro's value
-					extractValue(macroDesc, *mpLexer);
+					break;
 				}
-				break;
-			default:
-				mOnErrorCallback();
-				break;
+
+				_expect(E_TOKEN_TYPE::COMMA, currToken.mType);
+			}
+
+			currToken = mpLexer->GetNextToken();
+			_expect(E_TOKEN_TYPE::SPACE, currToken.mType);
+
+			// \note parse macro's value
+			extractValue(macroDesc, *mpLexer);
+		}
+		break;
+		default:
+			mOnErrorCallback();
+			break;
 		}
 
 		if (std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&macroDesc](auto&& item) { return item.mName == macroDesc.mName; }) != mSymTable.cend())
@@ -776,7 +774,7 @@ namespace tcpp
 		}
 
 		// \note execute macro's expansion
-		std::vector<TToken> replacementList { macroDesc.mValue.cbegin(), macroDesc.mValue.cend() };
+		std::vector<TToken> replacementList{ macroDesc.mValue.cbegin(), macroDesc.mValue.cend() };
 		const auto& argsList = macroDesc.mArgsNames;
 
 		for (short currArgIndex = 0; currArgIndex < processingTokens.size(); ++currArgIndex)
@@ -809,9 +807,52 @@ namespace tcpp
 		mOnErrorCallback();
 	}
 
-	std::string Preprocessor::_processInclusion() TCPP_NOEXCEPT
+	void Preprocessor::_processInclusion() TCPP_NOEXCEPT
 	{
-		return "";
+		TToken currToken;
+
+		while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
+		
+		if (currToken.mType != E_TOKEN_TYPE::LESS && currToken.mType != E_TOKEN_TYPE::QUOTES)
+		{
+			while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::NEWLINE); // \note skip to end of current line
+
+			mOnErrorCallback();
+			return;
+		}
+
+		bool isSystemPathInclusion = currToken.mType == E_TOKEN_TYPE::LESS;
+		
+		std::string path;
+
+		while (true)
+		{
+			if ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::QUOTES ||
+				currToken.mType == E_TOKEN_TYPE::GREATER)
+			{
+				break;
+			}
+
+			if (currToken.mType == E_TOKEN_TYPE::NEWLINE)
+			{
+				mOnErrorCallback();
+				break;
+			}
+
+			path.append(currToken.mRawView);
+		}
+
+		while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE);
+		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
+
+		IInputStream* pInputStream = mOnIncludeCallback(path, isSystemPathInclusion);
+		if (!pInputStream)
+		{
+			TCPP_ASSERT(false);
+			return;
+		}
+
+		mpLexer->PushStream(*pInputStream);
 	}
 
 #endif
