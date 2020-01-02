@@ -29,6 +29,7 @@
 #include <tuple>
 #include <stack>
 #include <unordered_set>
+#include <unordered_map>
 
 
 ///< Library's configs
@@ -153,6 +154,8 @@ namespace tcpp
 
 			void PushStream(IInputStream& stream) TCPP_NOEXCEPT;
 			void PopStream() TCPP_NOEXCEPT;
+
+			size_t GetCurrLineIndex() const TCPP_NOEXCEPT;
 		private:
 			TToken _scanTokens(std::string& inputLine) TCPP_NOEXCEPT;
 
@@ -224,7 +227,7 @@ namespace tcpp
 			void _createMacroDefinition() TCPP_NOEXCEPT;
 			void _removeMacroDefinition(const std::string& macroName) TCPP_NOEXCEPT;
 
-			std::vector<TToken> _expandMacroDefinition(const TMacroDesc& macroDesc) TCPP_NOEXCEPT;
+			std::vector<TToken> _expandMacroDefinition(const TMacroDesc& macroDesc, const TToken& idToken) TCPP_NOEXCEPT;
 
 			void _expect(const E_TOKEN_TYPE& expectedType, const E_TOKEN_TYPE& actualType) TCPP_NOEXCEPT;
 
@@ -293,7 +296,7 @@ namespace tcpp
 
 	bool Lexer::HasNextToken() const TCPP_NOEXCEPT
 	{
-		return _getActiveStream()->HasNextLine() || !mCurrLine.empty();
+		return _getActiveStream()->HasNextLine() || !mCurrLine.empty() || !mTokensQueue.empty();
 	}
 
 	void Lexer::AppendFront(const std::vector<TToken>& tokens) TCPP_NOEXCEPT
@@ -309,6 +312,11 @@ namespace tcpp
 	void Lexer::PopStream() TCPP_NOEXCEPT
 	{
 		mStreamsContext.pop();
+	}
+
+	size_t Lexer::GetCurrLineIndex() const TCPP_NOEXCEPT
+	{
+		return mCurrLineIndex;
 	}
 
 	TToken Lexer::_scanTokens(std::string& inputLine) TCPP_NOEXCEPT
@@ -565,18 +573,18 @@ namespace tcpp
 	{
 		switch (ch)
 		{
-		case ',':
-			return { E_TOKEN_TYPE::COMMA, ",", mCurrLineIndex };
-		case '(':
-			return { E_TOKEN_TYPE::OPEN_BRACKET, "(", mCurrLineIndex };
-		case ')':
-			return { E_TOKEN_TYPE::CLOSE_BRACKET, ")", mCurrLineIndex };
-		case '<':
-			return { E_TOKEN_TYPE::LESS, "<", mCurrLineIndex };
-		case '>':
-			return { E_TOKEN_TYPE::GREATER, ">", mCurrLineIndex };
-		case '\"':
-			return { E_TOKEN_TYPE::QUOTES, "\"", mCurrLineIndex };
+			case ',':
+				return { E_TOKEN_TYPE::COMMA, ",", mCurrLineIndex };
+			case '(':
+				return { E_TOKEN_TYPE::OPEN_BRACKET, "(", mCurrLineIndex };
+			case ')':
+				return { E_TOKEN_TYPE::CLOSE_BRACKET, ")", mCurrLineIndex };
+			case '<':
+				return { E_TOKEN_TYPE::LESS, "<", mCurrLineIndex };
+			case '>':
+				return { E_TOKEN_TYPE::GREATER, ">", mCurrLineIndex };
+			case '\"':
+				return { E_TOKEN_TYPE::QUOTES, "\"", mCurrLineIndex };
 		}
 
 		return mEOFToken;
@@ -591,6 +599,7 @@ namespace tcpp
 	Preprocessor::Preprocessor(Lexer& lexer, const std::function<void()>& onErrorCallback, const TOnIncludeCallback& onIncludeCallback) TCPP_NOEXCEPT:
 		mpLexer(&lexer), mOnErrorCallback(onErrorCallback), mOnIncludeCallback(onIncludeCallback)
 	{
+		mSymTable.push_back({ "__LINE__" });
 	}
 
 	std::string Preprocessor::Process() TCPP_NOEXCEPT
@@ -606,48 +615,48 @@ namespace tcpp
 
 			switch (currToken.mType)
 			{
-			case E_TOKEN_TYPE::DEFINE:
-				_createMacroDefinition();
-				break;
-			case E_TOKEN_TYPE::UNDEF:
-				currToken = mpLexer->GetNextToken();
-				_expect(E_TOKEN_TYPE::IDENTIFIER, currToken.mType);
-				_removeMacroDefinition(currToken.mRawView);
-				break;
-			case E_TOKEN_TYPE::INCLUDE:
-				_processInclusion();
-				break;
-			case E_TOKEN_TYPE::IDENTIFIER: // \note try to expand some macro here
-			{
-				auto iter = std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&currToken](auto&& item)
+				case E_TOKEN_TYPE::DEFINE:
+					_createMacroDefinition();
+					break;
+				case E_TOKEN_TYPE::UNDEF:
+					currToken = mpLexer->GetNextToken();
+					_expect(E_TOKEN_TYPE::IDENTIFIER, currToken.mType);
+					_removeMacroDefinition(currToken.mRawView);
+					break;
+				case E_TOKEN_TYPE::INCLUDE:
+					_processInclusion();
+					break;
+				case E_TOKEN_TYPE::IDENTIFIER: // \note try to expand some macro here
 				{
-					return item.mName == currToken.mRawView;
-				});
+					auto iter = std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&currToken](auto&& item)
+					{
+						return item.mName == currToken.mRawView;
+					});
 
-				auto contextIter = std::find_if(mContextStack.cbegin(), mContextStack.cend(), [&currToken](auto&& item)
-				{
-					return item == currToken.mRawView;
-				});
+					auto contextIter = std::find_if(mContextStack.cbegin(), mContextStack.cend(), [&currToken](auto&& item)
+					{
+						return item == currToken.mRawView;
+					});
 
-				if (iter != mSymTable.cend() && contextIter == mContextStack.cend())
-				{
-					mpLexer->AppendFront(_expandMacroDefinition(*iter));
+					if (iter != mSymTable.cend() && contextIter == mContextStack.cend())
+					{
+						mpLexer->AppendFront(_expandMacroDefinition(*iter, currToken));
+					}
+					else
+					{
+						processedStr.append(currToken.mRawView);
+					}
 				}
-				else
-				{
+				break;
+				case E_TOKEN_TYPE::REJECT_MACRO:
+					mContextStack.erase(std::remove_if(mContextStack.begin(), mContextStack.end(), [&currToken](auto&& item)
+					{
+						return item == currToken.mRawView;
+					}), mContextStack.end());
+					break;
+				default:
 					processedStr.append(currToken.mRawView);
-				}
-			}
-			break;
-			case E_TOKEN_TYPE::REJECT_MACRO:
-				mContextStack.erase(std::remove_if(mContextStack.begin(), mContextStack.end(), [&currToken](auto&& item)
-				{
-					return item == currToken.mRawView;
-				}), mContextStack.end());
-				break;
-			default:
-				processedStr.append(currToken.mRawView);
-				break;
+					break;
 			}
 		}
 
@@ -686,38 +695,38 @@ namespace tcpp
 		currToken = mpLexer->GetNextToken();
 		switch (currToken.mType)
 		{
-		case E_TOKEN_TYPE::SPACE:	// object like macro
-			extractValue(macroDesc, *mpLexer);
-			break;
-		case E_TOKEN_TYPE::OPEN_BRACKET: // function line macro
-		{
-			// \note parse arguments
-			while (true)
+			case E_TOKEN_TYPE::SPACE:	// object like macro
+				extractValue(macroDesc, *mpLexer);
+				break;
+			case E_TOKEN_TYPE::OPEN_BRACKET: // function line macro
 			{
-				while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
-
-				_expect(E_TOKEN_TYPE::IDENTIFIER, currToken.mType);
-				macroDesc.mArgsNames.push_back(currToken.mRawView);
-
-				while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE);
-				if (currToken.mType == E_TOKEN_TYPE::CLOSE_BRACKET)
+				// \note parse arguments
+				while (true)
 				{
-					break;
+					while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
+
+					_expect(E_TOKEN_TYPE::IDENTIFIER, currToken.mType);
+					macroDesc.mArgsNames.push_back(currToken.mRawView);
+
+					while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE);
+					if (currToken.mType == E_TOKEN_TYPE::CLOSE_BRACKET)
+					{
+						break;
+					}
+
+					_expect(E_TOKEN_TYPE::COMMA, currToken.mType);
 				}
 
-				_expect(E_TOKEN_TYPE::COMMA, currToken.mType);
+				currToken = mpLexer->GetNextToken();
+				_expect(E_TOKEN_TYPE::SPACE, currToken.mType);
+
+				// \note parse macro's value
+				extractValue(macroDesc, *mpLexer);
 			}
-
-			currToken = mpLexer->GetNextToken();
-			_expect(E_TOKEN_TYPE::SPACE, currToken.mType);
-
-			// \note parse macro's value
-			extractValue(macroDesc, *mpLexer);
-		}
-		break;
-		default:
-			mOnErrorCallback();
 			break;
+			default:
+				mOnErrorCallback();
+				break;
 		}
 
 		if (std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&macroDesc](auto&& item) { return item.mName == macroDesc.mName; }) != mSymTable.cend())
@@ -744,15 +753,26 @@ namespace tcpp
 		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
 	}
 
-	std::vector<TToken> Preprocessor::_expandMacroDefinition(const TMacroDesc& macroDesc) TCPP_NOEXCEPT
+	std::vector<TToken> Preprocessor::_expandMacroDefinition(const TMacroDesc& macroDesc, const TToken& idToken) TCPP_NOEXCEPT
 	{
-		mContextStack.push_back(macroDesc.mName);
-
 		// \note expand object like macro with simple replacement
 		if (macroDesc.mArgsNames.empty())
 		{
+			static const std::unordered_map<std::string, std::function<TToken()>> systemMacrosTable
+			{
+				{ "__LINE__", [&idToken]() { return TToken { E_TOKEN_TYPE::BLOB, std::to_string(idToken.mLineId) }; } }
+			};
+
+			auto iter = systemMacrosTable.find(macroDesc.mName);
+			if (iter != systemMacrosTable.cend())
+			{
+				return { iter->second() };
+			}
+
 			return macroDesc.mValue;
 		}
+
+		mContextStack.push_back(macroDesc.mName);
 
 		// \note function like macro's case
 		auto currToken = mpLexer->GetNextToken();

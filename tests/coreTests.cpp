@@ -62,4 +62,14 @@ TEST_CASE("Preprocessor Tests")
 		});
 		preprocessor.Process();
 	}
+
+	SECTION("TestProcess_PassSourceWithIncludeDirective_ReturnsSourceStringWithIncludeDirective")
+	{
+		std::string inputSource = "__LINE__\n__LINE__\n__LINE__";
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		Preprocessor preprocessor(lexer, errorCallback);
+		REQUIRE(preprocessor.Process() == "1\n2\n3");
+	}
 }
