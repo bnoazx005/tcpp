@@ -199,4 +199,50 @@ TEST_CASE("Lexer Tests")
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::CLOSE_BRACKET);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
+
+	SECTION("TestAppendFront_PassFewTokensToExistingOnes_ReturnsAppendedFirstlyThenRest")
+	{
+		MockInputStream streams[]
+		{
+			MockInputStream{ { "line\n", "another line\n" } },
+			MockInputStream{ { "(\n", ")\n" } },
+			MockInputStream{ { "+\n", "#define\n" } },
+		};
+
+		Lexer lexer(streams[0]);
+
+		{
+			REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
+			REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NEWLINE);
+
+			{
+				lexer.PushStream(streams[1]);
+
+				REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::OPEN_BRACKET);
+				REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NEWLINE);
+				REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::CLOSE_BRACKET);
+				REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NEWLINE);
+
+				lexer.PopStream();
+			}
+
+			REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
+			REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
+			REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
+			REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NEWLINE);
+
+			{
+				lexer.PushStream(streams[2]);
+
+				REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::BLOB);
+				REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NEWLINE);
+				REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::DEFINE);
+				REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NEWLINE);
+
+				lexer.PopStream();
+			}
+		}
+
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
+	}
 }

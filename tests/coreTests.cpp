@@ -42,4 +42,17 @@ TEST_CASE("Preprocessor Tests")
 		Preprocessor preprocessor(lexer, errorCallback);
 		std::cout << preprocessor.Process() << std::endl;
 	}
+
+	SECTION("TestProcess_PassSourceWithIncludeDirective_ReturnsSourceStringWithIncludeDirective")
+	{
+		std::string inputSource = "#include <system>\n#include \"non_system_path\"\n void main()\n{\n\treturn ADD(2, 3);\n}";
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		Preprocessor preprocessor(lexer, errorCallback, [](const std::string& path, bool isSystem)
+		{
+			return path;
+		});
+		std::cout << preprocessor.Process() << std::endl;
+	}
 }

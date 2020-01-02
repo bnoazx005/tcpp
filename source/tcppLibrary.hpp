@@ -27,6 +27,7 @@
 #include <list>
 #include <algorithm>
 #include <tuple>
+#include <stack>
 #include <unordered_set>
 
 
@@ -138,6 +139,7 @@ namespace tcpp
 	{
 		private:
 			using TTokensQueue = std::list<TToken>;
+			using TStreamStack = std::stack<IInputStream*>;
 		public:
 			Lexer() TCPP_NOEXCEPT = delete;
 			Lexer(IInputStream& inputStream) TCPP_NOEXCEPT;
@@ -148,6 +150,9 @@ namespace tcpp
 			bool HasNextToken() const TCPP_NOEXCEPT;
 
 			void AppendFront(const std::vector<TToken>& tokens) TCPP_NOEXCEPT;
+
+			void PushStream(IInputStream& stream) TCPP_NOEXCEPT;
+			void PopStream() TCPP_NOEXCEPT;
 		private:
 			TToken _scanTokens(std::string& inputLine) TCPP_NOEXCEPT;
 
@@ -158,16 +163,18 @@ namespace tcpp
 			std::string _requestSourceLine() TCPP_NOEXCEPT;
 
 			TToken _scanSeparatorTokens(char ch) TCPP_NOEXCEPT;
+
+			IInputStream* _getActiveStream() const TCPP_NOEXCEPT;
 		private:
 			static const TToken mEOFToken;
 			
 			TTokensQueue mTokensQueue;
 
-			IInputStream* mpInputStream;
-
 			std::string mCurrLine;
 
 			size_t mCurrLineIndex = 0;
+
+			TStreamStack mStreamsContext;
 	};
 
 
@@ -199,12 +206,13 @@ namespace tcpp
 	{
 		public:
 			using TOnErrorCallback = std::function<void()>;
+			using TOnIncludeCallback = std::function<std::string(const std::string&, bool)>;
 			using TSymTable = std::vector<TMacroDesc>;
 			using TContextStack = std::list<std::string>;
 		public:
 			Preprocessor() TCPP_NOEXCEPT = delete;
 			Preprocessor(const Preprocessor&) TCPP_NOEXCEPT = delete;
-			Preprocessor(Lexer& lexer, const TOnErrorCallback& onErrorCallback = {}) TCPP_NOEXCEPT;
+			Preprocessor(Lexer& lexer, const TOnErrorCallback& onErrorCallback = {}, const TOnIncludeCallback& onIncludeCallback = {}) TCPP_NOEXCEPT;
 			~Preprocessor() TCPP_NOEXCEPT = default;
 
 			std::string Process() TCPP_NOEXCEPT;
@@ -217,9 +225,12 @@ namespace tcpp
 			std::vector<TToken> _expandMacroDefinition(const TMacroDesc& macroDesc) TCPP_NOEXCEPT;
 
 			void _expect(const E_TOKEN_TYPE& expectedType, const E_TOKEN_TYPE& actualType) TCPP_NOEXCEPT;
+
+			std::string _processInclusion() TCPP_NOEXCEPT;
 		private:
 			Lexer* mpLexer;
 			TOnErrorCallback mOnErrorCallback;
+			TOnIncludeCallback mOnIncludeCallback;
 			TSymTable mSymTable;
 			TContextStack mContextStack;
 	};
@@ -250,8 +261,9 @@ namespace tcpp
 	const TToken Lexer::mEOFToken = { E_TOKEN_TYPE::END };
 
 	Lexer::Lexer(IInputStream& inputStream) TCPP_NOEXCEPT:
-		mpInputStream(&inputStream), mCurrLine(), mCurrLineIndex(0)
+		mCurrLine(), mCurrLineIndex(0)
 	{
+		PushStream(inputStream);
 	}
 
 	TToken Lexer::GetNextToken() TCPP_NOEXCEPT
@@ -279,12 +291,22 @@ namespace tcpp
 
 	bool Lexer::HasNextToken() const TCPP_NOEXCEPT
 	{
-		return mpInputStream->HasNextLine() || !mCurrLine.empty();
+		return _getActiveStream()->HasNextLine() || !mCurrLine.empty();
 	}
 
 	void Lexer::AppendFront(const std::vector<TToken>& tokens) TCPP_NOEXCEPT
 	{
 		mTokensQueue.insert(mTokensQueue.begin(), tokens.begin(), tokens.end());
+	}
+
+	void Lexer::PushStream(IInputStream& stream) TCPP_NOEXCEPT
+	{
+		mStreamsContext.push(&stream);
+	}
+
+	void Lexer::PopStream() TCPP_NOEXCEPT
+	{
+		mStreamsContext.pop();
 	}
 
 	TToken Lexer::_scanTokens(std::string& inputLine) TCPP_NOEXCEPT
@@ -442,6 +464,14 @@ namespace tcpp
 			return { E_TOKEN_TYPE::BLOB, currStr, mCurrLineIndex };
 		}
 
+		PopStream();
+		
+		//\note try to continue preprocessing if there is at least one input stream
+		if (!mStreamsContext.empty())
+		{
+			return GetNextToken();
+		}
+
 		return mEOFToken;
 	}
 
@@ -492,21 +522,23 @@ namespace tcpp
 
 	std::string Lexer::_requestSourceLine() TCPP_NOEXCEPT
 	{
-		if (!mpInputStream->HasNextLine())
+		IInputStream* pCurrInputStream = _getActiveStream();
+
+		if (!pCurrInputStream->HasNextLine())
 		{
 			return "";
 		}
 
-		std::string sourceLine = _removeSingleLineComment(mpInputStream->ReadLine());
+		std::string sourceLine = _removeSingleLineComment(pCurrInputStream->ReadLine());
 		++mCurrLineIndex;
 
 		/// \note join lines that were splitted with backslash sign
 		std::string::size_type pos = 0;
 		while (((pos = sourceLine.find_first_of('\\')) != std::string::npos))
 		{
-			if (mpInputStream->HasNextLine())
+			if (pCurrInputStream->HasNextLine())
 			{
-				sourceLine.replace(pos ? (pos - 1) : 0, std::string::npos, _removeSingleLineComment(mpInputStream->ReadLine()));
+				sourceLine.replace(pos ? (pos - 1) : 0, std::string::npos, _removeSingleLineComment(pCurrInputStream->ReadLine()));
 				++mCurrLineIndex;
 
 				continue;
@@ -550,9 +582,14 @@ namespace tcpp
 		return mEOFToken;
 	}
 
+	IInputStream* Lexer::_getActiveStream() const TCPP_NOEXCEPT
+	{
+		return mStreamsContext.top();
+	}
 
-	Preprocessor::Preprocessor(Lexer& lexer, const std::function<void()>& onErrorCallback) TCPP_NOEXCEPT:
-		mpLexer(&lexer), mOnErrorCallback(onErrorCallback)
+
+	Preprocessor::Preprocessor(Lexer& lexer, const std::function<void()>& onErrorCallback, const TOnIncludeCallback& onIncludeCallback) TCPP_NOEXCEPT:
+		mpLexer(&lexer), mOnErrorCallback(onErrorCallback), mOnIncludeCallback(onIncludeCallback)
 	{
 	}
 
@@ -578,6 +615,7 @@ namespace tcpp
 					_removeMacroDefinition(currToken.mRawView);
 					break;
 				case E_TOKEN_TYPE::INCLUDE:
+					_processInclusion();
 					break;
 				case E_TOKEN_TYPE::IDENTIFIER: // \note try to expand some macro here
 					{
@@ -769,6 +807,11 @@ namespace tcpp
 		}
 
 		mOnErrorCallback();
+	}
+
+	std::string Preprocessor::_processInclusion() TCPP_NOEXCEPT
+	{
+		return "";
 	}
 
 #endif
