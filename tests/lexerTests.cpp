@@ -60,7 +60,7 @@ TEST_CASE("Lexer Tests")
 
 	SECTION("TestGetNextToken_PassStreamWithDirectives_ReturnsCorrespondingTokens")
 	{
-		MockInputStream input({ "#define", "#if", "#else", "#elif", "#include", });
+		MockInputStream input({ "#define", "#if", "#else", "#elif", "#include", "#endif" });
 		Lexer lexer(input);
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::DEFINE);
@@ -68,6 +68,7 @@ TEST_CASE("Lexer Tests")
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::ELSE);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::ELIF);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::INCLUDE);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::ENDIF);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
 
@@ -182,6 +183,20 @@ TEST_CASE("Lexer Tests")
 			REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
 		}
 
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
+	}
+
+	SECTION("TestAppendFront_PassFewTokens_ReturnsAllOfThem")
+	{
+		MockInputStream input({ "(2, 3)" });
+		Lexer lexer(input);
+
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::OPEN_BRACKET);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::BLOB);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::COMMA);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::BLOB);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::CLOSE_BRACKET);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
 }

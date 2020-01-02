@@ -94,6 +94,7 @@ namespace tcpp
 		ELSE,
 		ELIF,
 		UNDEF,
+		ENDIF,
 		INCLUDE,
 		SPACE,
 		BLOB,
@@ -106,7 +107,8 @@ namespace tcpp
 		QUOTES,
 		KEYWORD,
 		END,
-		UNKNOWN
+		UNKNOWN,
+		REJECT_MACRO, ///< Special type of a token to provide meta information 
 	};
 
 
@@ -147,13 +149,15 @@ namespace tcpp
 
 			void AppendFront(const std::vector<TToken>& tokens) TCPP_NOEXCEPT;
 		private:
-			TToken _scanTokens(std::string& inputLine) const TCPP_NOEXCEPT;
+			TToken _scanTokens(std::string& inputLine) TCPP_NOEXCEPT;
 
 			std::string _removeSingleLineComment(const std::string& line) const TCPP_NOEXCEPT;
 
 			std::string _removeMultiLineComments(const std::string& currInput) TCPP_NOEXCEPT;
 
 			std::string _requestSourceLine() TCPP_NOEXCEPT;
+
+			TToken _scanSeparatorTokens(char ch) TCPP_NOEXCEPT;
 		private:
 			static const TToken mEOFToken;
 			
@@ -196,6 +200,7 @@ namespace tcpp
 		public:
 			using TOnErrorCallback = std::function<void()>;
 			using TSymTable = std::vector<TMacroDesc>;
+			using TContextStack = std::list<std::string>;
 		public:
 			Preprocessor() TCPP_NOEXCEPT = delete;
 			Preprocessor(const Preprocessor&) TCPP_NOEXCEPT = delete;
@@ -216,6 +221,7 @@ namespace tcpp
 			Lexer* mpLexer;
 			TOnErrorCallback mOnErrorCallback;
 			TSymTable mSymTable;
+			TContextStack mContextStack;
 	};
 
 
@@ -281,7 +287,7 @@ namespace tcpp
 		mTokensQueue.insert(mTokensQueue.begin(), tokens.begin(), tokens.end());
 	}
 
-	TToken Lexer::_scanTokens(std::string& inputLine) const TCPP_NOEXCEPT
+	TToken Lexer::_scanTokens(std::string& inputLine) TCPP_NOEXCEPT
 	{
 		char ch = '\0';
 
@@ -292,6 +298,7 @@ namespace tcpp
 			{ "else", E_TOKEN_TYPE::ELSE },
 			{ "elif", E_TOKEN_TYPE::ELIF },
 			{ "undef", E_TOKEN_TYPE::UNDEF },
+			{ "endif", E_TOKEN_TYPE::ENDIF },
 			{ "include", E_TOKEN_TYPE::INCLUDE },
 		};
 
@@ -410,23 +417,19 @@ namespace tcpp
 			{
 				if (!currStr.empty())
 				{
+					auto separatingToken = _scanSeparatorTokens(ch);
+					if (separatingToken.mType != mEOFToken.mType)
+					{
+						mTokensQueue.push_front(separatingToken);
+					}
+
 					return { E_TOKEN_TYPE::BLOB, currStr, mCurrLineIndex }; // flush current blob
 				}
 
-				switch (ch)
+				auto separatingToken = _scanSeparatorTokens(ch);
+				if (separatingToken.mType != mEOFToken.mType)
 				{
-					case ',':
-						return { E_TOKEN_TYPE::COMMA, ",", mCurrLineIndex };
-					case '(':
-						return { E_TOKEN_TYPE::OPEN_BRACKET, "(", mCurrLineIndex };
-					case ')':
-						return { E_TOKEN_TYPE::CLOSE_BRACKET, ")", mCurrLineIndex };
-					case '<':
-						return { E_TOKEN_TYPE::LESS, "<", mCurrLineIndex };
-					case '>':
-						return { E_TOKEN_TYPE::GREATER, ">", mCurrLineIndex };
-					case '\"':
-						return { E_TOKEN_TYPE::QUOTES, "\"", mCurrLineIndex };
+					return separatingToken;
 				}
 			}
 
@@ -526,6 +529,27 @@ namespace tcpp
 		return sourceLine;
 	}
 
+	TToken Lexer::_scanSeparatorTokens(char ch) TCPP_NOEXCEPT
+	{
+		switch (ch)
+		{
+			case ',':
+				return { E_TOKEN_TYPE::COMMA, ",", mCurrLineIndex };
+			case '(':
+				return { E_TOKEN_TYPE::OPEN_BRACKET, "(", mCurrLineIndex };
+			case ')':
+				return { E_TOKEN_TYPE::CLOSE_BRACKET, ")", mCurrLineIndex };
+			case '<':
+				return { E_TOKEN_TYPE::LESS, "<", mCurrLineIndex };
+			case '>':
+				return { E_TOKEN_TYPE::GREATER, ">", mCurrLineIndex };
+			case '\"':
+				return { E_TOKEN_TYPE::QUOTES, "\"", mCurrLineIndex };
+		}
+
+		return mEOFToken;
+	}
+
 
 	Preprocessor::Preprocessor(Lexer& lexer, const std::function<void()>& onErrorCallback) TCPP_NOEXCEPT:
 		mpLexer(&lexer), mOnErrorCallback(onErrorCallback)
@@ -562,7 +586,12 @@ namespace tcpp
 							return item.mName == currToken.mRawView;
 						});
 
-						if (iter != mSymTable.cend())
+						auto contextIter = std::find_if(mContextStack.cbegin(), mContextStack.cend(), [&currToken](auto&& item)
+						{
+							return item == currToken.mRawView;
+						});
+
+						if (iter != mSymTable.cend() && contextIter == mContextStack.cend())
 						{
 							mpLexer->AppendFront(_expandMacroDefinition(*iter));
 						}
@@ -571,6 +600,12 @@ namespace tcpp
 							processedStr.append(currToken.mRawView);
 						}
 					}
+					break;
+				case E_TOKEN_TYPE::REJECT_MACRO:
+					mContextStack.erase(std::remove_if(mContextStack.begin(), mContextStack.end(), [&currToken](auto&& item)
+					{
+						return item == currToken.mRawView;
+					}), mContextStack.end());
 					break;
 				default:
 					processedStr.append(currToken.mRawView);
@@ -668,12 +703,62 @@ namespace tcpp
 
 	std::vector<TToken> Preprocessor::_expandMacroDefinition(const TMacroDesc& macroDesc) TCPP_NOEXCEPT
 	{
+		mContextStack.push_back(macroDesc.mName);
+
+		// \note expand object like macro with simple replacement
 		if (macroDesc.mArgsNames.empty())
 		{
 			return macroDesc.mValue;
 		}
 
-		return {};
+		// \note function like macro's case
+		auto currToken = mpLexer->GetNextToken();
+		_expect(E_TOKEN_TYPE::OPEN_BRACKET, currToken.mType);
+
+		std::vector<TToken> processingTokens;
+
+		// \note read all arguments values
+		while (true)
+		{
+			while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
+			processingTokens.push_back(currToken);
+
+			while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE);
+			if (currToken.mType == E_TOKEN_TYPE::CLOSE_BRACKET)
+			{
+				break;
+			}
+
+			_expect(E_TOKEN_TYPE::COMMA, currToken.mType);
+		}
+
+		if (processingTokens.size() != macroDesc.mArgsNames.size())
+		{
+			mOnErrorCallback();
+		}
+
+		// \note execute macro's expansion
+		std::vector<TToken> replacementList { macroDesc.mValue.cbegin(), macroDesc.mValue.cend() };
+		const auto& argsList = macroDesc.mArgsNames;
+
+		for (short currArgIndex = 0; currArgIndex < processingTokens.size(); ++currArgIndex)
+		{
+			const std::string& currArgName = argsList[currArgIndex];
+			auto&& currArgValueToken = processingTokens[currArgIndex];
+
+			for (auto& currToken : replacementList)
+			{
+				if ((currToken.mType != E_TOKEN_TYPE::IDENTIFIER) || (currToken.mRawView != currArgName))
+				{
+					continue;
+				}
+
+				currToken.mRawView = currArgValueToken.mRawView;
+			}
+		}
+
+		replacementList.push_back({ E_TOKEN_TYPE::REJECT_MACRO, macroDesc.mName });
+		return replacementList;
 	}
 
 	void Preprocessor::_expect(const E_TOKEN_TYPE& expectedType, const E_TOKEN_TYPE& actualType) TCPP_NOEXCEPT
