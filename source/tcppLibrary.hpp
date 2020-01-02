@@ -218,6 +218,8 @@ namespace tcpp
 			std::string Process() TCPP_NOEXCEPT;
 
 			Preprocessor& operator= (const Preprocessor&) TCPP_NOEXCEPT = delete;
+
+			TSymTable GetSymbolsTable() const TCPP_NOEXCEPT;
 		private:
 			void _createMacroDefinition() TCPP_NOEXCEPT;
 			void _removeMacroDefinition(const std::string& macroName) TCPP_NOEXCEPT;
@@ -650,6 +652,11 @@ namespace tcpp
 		}
 
 		return processedStr;
+	}
+	
+	Preprocessor::TSymTable Preprocessor::GetSymbolsTable() const TCPP_NOEXCEPT
+	{
+		return mSymTable;
 	}
 
 	void Preprocessor::_createMacroDefinition() TCPP_NOEXCEPT
