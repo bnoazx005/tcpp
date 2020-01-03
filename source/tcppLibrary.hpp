@@ -112,6 +112,17 @@ namespace tcpp
 		REJECT_MACRO, ///< Special type of a token to provide meta information 
 		STRINGIZE_OP,
 		CONCAT_OP,
+		NUMBER,
+		PLUS,
+		MINUS,
+		SLASH,
+		STAR,
+		OR,
+		AND,
+		AMPERSAND,
+		VLINE,
+		LSHIFT,
+		RSHIFT,
 		UNKNOWN,
 	};
 
@@ -167,7 +178,7 @@ namespace tcpp
 
 			std::string _requestSourceLine() TCPP_NOEXCEPT;
 
-			TToken _scanSeparatorTokens(char ch) TCPP_NOEXCEPT;
+			TToken _scanSeparatorTokens(char ch, std::string& inputLine) TCPP_NOEXCEPT;
 
 			IInputStream* _getActiveStream() const TCPP_NOEXCEPT;
 		private:
@@ -234,6 +245,10 @@ namespace tcpp
 			void _expect(const E_TOKEN_TYPE& expectedType, const E_TOKEN_TYPE& actualType) TCPP_NOEXCEPT;
 
 			void _processInclusion() TCPP_NOEXCEPT;
+
+			void _processConditional() TCPP_NOEXCEPT;
+
+			bool _evaluateExpression(const std::vector<TToken>& exprTokens) const TCPP_NOEXCEPT;
 		private:
 			Lexer* mpLexer;
 			TOnErrorCallback mOnErrorCallback;
@@ -348,7 +363,7 @@ namespace tcpp
 			"do", "if", "static", "while"
 		};
 
-		static const std::string separators = ",()<>\"";
+		static const std::string separators = ",()<>\"+-*\/&|";
 
 		std::string currStr = "";
 
@@ -421,6 +436,44 @@ namespace tcpp
 				}
 			}
 
+			if (std::isdigit(ch))
+			{
+				// flush current blob
+				if (!currStr.empty())
+				{
+					return { E_TOKEN_TYPE::BLOB, currStr, mCurrLineIndex };
+				}
+
+				std::string number;
+				std::string::size_type i = 0;
+
+				if (ch == '0' && !inputLine.empty())
+				{
+					inputLine.erase(0, 1);
+					number.push_back(ch);
+
+					char nextCh = inputLine.front();
+					if (nextCh == 'x' || std::isdigit(nextCh))
+					{
+						inputLine.erase(0, 1);
+						number.push_back(nextCh);
+					}
+					else
+					{
+						return { E_TOKEN_TYPE::NUMBER, number, mCurrLineIndex };
+					}
+				}
+
+				do
+				{
+					number.push_back(ch);
+				} while ((i < inputLine.length()) && std::isdigit(ch = inputLine[++i]));
+
+				inputLine.erase(0, number.length());
+
+				return { E_TOKEN_TYPE::NUMBER, number, mCurrLineIndex };
+			}
+
 			if (std::isalpha(ch)) ///< \note try to parse a keyword
 			{
 				char savedCh = ch;
@@ -467,7 +520,7 @@ namespace tcpp
 			{
 				if (!currStr.empty())
 				{
-					auto separatingToken = _scanSeparatorTokens(ch);
+					auto separatingToken = _scanSeparatorTokens(ch, inputLine);
 					if (separatingToken.mType != mEOFToken.mType)
 					{
 						mTokensQueue.push_front(separatingToken);
@@ -476,7 +529,7 @@ namespace tcpp
 					return { E_TOKEN_TYPE::BLOB, currStr, mCurrLineIndex }; // flush current blob
 				}
 
-				auto separatingToken = _scanSeparatorTokens(ch);
+				auto separatingToken = _scanSeparatorTokens(ch, inputLine);
 				if (separatingToken.mType != mEOFToken.mType)
 				{
 					return separatingToken;
@@ -589,7 +642,7 @@ namespace tcpp
 		return sourceLine;
 	}
 
-	TToken Lexer::_scanSeparatorTokens(char ch) TCPP_NOEXCEPT
+	TToken Lexer::_scanSeparatorTokens(char ch, std::string& inputLine) TCPP_NOEXCEPT
 	{
 		switch (ch)
 		{
@@ -600,11 +653,47 @@ namespace tcpp
 			case ')':
 				return { E_TOKEN_TYPE::CLOSE_BRACKET, ")", mCurrLineIndex };
 			case '<':
+				if (!inputLine.empty() && inputLine.front() == '<')
+				{
+					inputLine.erase(0, 1);
+					return { E_TOKEN_TYPE::LSHIFT, "<<", mCurrLineIndex };
+				}
+
 				return { E_TOKEN_TYPE::LESS, "<", mCurrLineIndex };
 			case '>':
+				if (!inputLine.empty() && inputLine.front() == '>')
+				{
+					inputLine.erase(0, 1);
+					return { E_TOKEN_TYPE::RSHIFT, ">>", mCurrLineIndex };
+				}
+
 				return { E_TOKEN_TYPE::GREATER, ">", mCurrLineIndex };
 			case '\"':
 				return { E_TOKEN_TYPE::QUOTES, "\"", mCurrLineIndex };
+			case '+':
+				return { E_TOKEN_TYPE::PLUS, "+", mCurrLineIndex };
+			case '-':
+				return { E_TOKEN_TYPE::MINUS, "-", mCurrLineIndex };
+			case '*':
+				return { E_TOKEN_TYPE::STAR, "*", mCurrLineIndex };
+			case '/':
+				return { E_TOKEN_TYPE::SLASH, "/", mCurrLineIndex };
+			case '&':
+				if (!inputLine.empty() && inputLine.front() == '&')
+				{
+					inputLine.erase(0, 1);
+					return { E_TOKEN_TYPE::AND, "&&", mCurrLineIndex };
+				}
+
+				return { E_TOKEN_TYPE::AMPERSAND, "&", mCurrLineIndex };
+			case '|':
+				if (!inputLine.empty() && inputLine.front() == '|')
+				{
+					inputLine.erase(0, 1);
+					return { E_TOKEN_TYPE::OR, "||", mCurrLineIndex };
+				}
+
+				return { E_TOKEN_TYPE::VLINE, "|", mCurrLineIndex };
 		}
 
 		return mEOFToken;
@@ -642,6 +731,9 @@ namespace tcpp
 					currToken = mpLexer->GetNextToken();
 					_expect(E_TOKEN_TYPE::IDENTIFIER, currToken.mType);
 					_removeMacroDefinition(currToken.mRawView);
+					break;
+				case E_TOKEN_TYPE::IF:
+					_processConditional();
 					break;
 				case E_TOKEN_TYPE::INCLUDE:
 					_processInclusion();
@@ -907,6 +999,43 @@ namespace tcpp
 		}
 
 		mpLexer->PushStream(*pInputStream);
+	}
+
+	void Preprocessor::_processConditional() TCPP_NOEXCEPT
+	{
+		auto currToken = mpLexer->GetNextToken();
+		_expect(E_TOKEN_TYPE::SPACE, currToken.mType);
+
+		std::vector<TToken> expressionTokens;
+
+		while ((currToken = mpLexer->GetNextToken()).mType != E_TOKEN_TYPE::NEWLINE)
+		{
+			expressionTokens.push_back(currToken);
+		}
+
+		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
+		
+		bool expressionResult = _evaluateExpression(expressionTokens);
+
+		while (!expressionResult && mpLexer->HasNextToken()) // \note skip all tokens until #endif, #elif or #else
+		{
+			currToken = mpLexer->GetNextToken();
+
+			if (currToken.mType == E_TOKEN_TYPE::ENDIF)
+			{
+				return;
+			}
+
+			if (currToken.mType == E_TOKEN_TYPE::ELSE || currToken.mType == E_TOKEN_TYPE::ELIF)
+			{
+				break;
+			}
+		}
+	}
+	
+	bool Preprocessor::_evaluateExpression(const std::vector<TToken>& exprTokens) const TCPP_NOEXCEPT
+	{
+		return false;
 	}
 
 #endif

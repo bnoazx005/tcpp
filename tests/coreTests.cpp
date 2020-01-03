@@ -92,4 +92,14 @@ TEST_CASE("Preprocessor Tests")
 		Preprocessor preprocessor(lexer, errorCallback);
 		REQUIRE(preprocessor.Process() == " 42");
 	}*/
+
+	SECTION("TestProcess_PassSourceWithConditionalBlocks_ReturnsSourceWithoutThisBlock")
+	{
+		std::string inputSource = "#if FOO\n // this block will be skiped\n #endif";
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		Preprocessor preprocessor(lexer, errorCallback);
+		REQUIRE(preprocessor.Process() == "");
+	}
 }
