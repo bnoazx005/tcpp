@@ -250,13 +250,13 @@ namespace tcpp
 
 			std::vector<TToken> _expandMacroDefinition(const TMacroDesc& macroDesc, const TToken& idToken) TCPP_NOEXCEPT;
 
-			void _expect(const E_TOKEN_TYPE& expectedType, const E_TOKEN_TYPE& actualType) TCPP_NOEXCEPT;
+			void _expect(const E_TOKEN_TYPE& expectedType, const E_TOKEN_TYPE& actualType) const TCPP_NOEXCEPT;
 
 			void _processInclusion() TCPP_NOEXCEPT;
 
-			void _processConditional() TCPP_NOEXCEPT;
+			void _processIfConditional() TCPP_NOEXCEPT;
 
-			bool _evaluateExpression(const std::vector<TToken>& exprTokens) const TCPP_NOEXCEPT;
+			int _evaluateExpression(const std::vector<TToken>& exprTokens) const TCPP_NOEXCEPT;
 		private:
 			Lexer* mpLexer;
 			TOnErrorCallback mOnErrorCallback;
@@ -776,7 +776,9 @@ namespace tcpp
 					_removeMacroDefinition(currToken.mRawView);
 					break;
 				case E_TOKEN_TYPE::IF:
-					_processConditional();
+					_processIfConditional();
+					break;
+				case E_TOKEN_TYPE::ENDIF:
 					break;
 				case E_TOKEN_TYPE::INCLUDE:
 					_processInclusion();
@@ -861,31 +863,31 @@ namespace tcpp
 				extractValue(macroDesc, *mpLexer);
 				break;
 			case E_TOKEN_TYPE::OPEN_BRACKET: // function line macro
-			{
-				// \note parse arguments
-				while (true)
 				{
-					while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
-
-					_expect(E_TOKEN_TYPE::IDENTIFIER, currToken.mType);
-					macroDesc.mArgsNames.push_back(currToken.mRawView);
-
-					while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE);
-					if (currToken.mType == E_TOKEN_TYPE::CLOSE_BRACKET)
+					// \note parse arguments
+					while (true)
 					{
-						break;
+						while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
+
+						_expect(E_TOKEN_TYPE::IDENTIFIER, currToken.mType);
+						macroDesc.mArgsNames.push_back(currToken.mRawView);
+
+						while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE);
+						if (currToken.mType == E_TOKEN_TYPE::CLOSE_BRACKET)
+						{
+							break;
+						}
+
+						_expect(E_TOKEN_TYPE::COMMA, currToken.mType);
 					}
 
-					_expect(E_TOKEN_TYPE::COMMA, currToken.mType);
+					currToken = mpLexer->GetNextToken();
+					_expect(E_TOKEN_TYPE::SPACE, currToken.mType);
+
+					// \note parse macro's value
+					extractValue(macroDesc, *mpLexer);
 				}
-
-				currToken = mpLexer->GetNextToken();
-				_expect(E_TOKEN_TYPE::SPACE, currToken.mType);
-
-				// \note parse macro's value
-				extractValue(macroDesc, *mpLexer);
-			}
-			break;
+				break;
 			default:
 				mOnErrorCallback();
 				break;
@@ -986,7 +988,7 @@ namespace tcpp
 		return replacementList;
 	}
 
-	void Preprocessor::_expect(const E_TOKEN_TYPE& expectedType, const E_TOKEN_TYPE& actualType) TCPP_NOEXCEPT
+	void Preprocessor::_expect(const E_TOKEN_TYPE& expectedType, const E_TOKEN_TYPE& actualType) const TCPP_NOEXCEPT
 	{
 		if (expectedType == actualType)
 		{
@@ -1044,7 +1046,7 @@ namespace tcpp
 		mpLexer->PushStream(*pInputStream);
 	}
 
-	void Preprocessor::_processConditional() TCPP_NOEXCEPT
+	void Preprocessor::_processIfConditional() TCPP_NOEXCEPT
 	{
 		auto currToken = mpLexer->GetNextToken();
 		_expect(E_TOKEN_TYPE::SPACE, currToken.mType);
@@ -1059,26 +1061,243 @@ namespace tcpp
 		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
 		
 		bool expressionResult = _evaluateExpression(expressionTokens);
+		bool elseBranchFound  = false;
 
-		while (!expressionResult && mpLexer->HasNextToken()) // \note skip all tokens until #endif, #elif or #else
+		std::vector<TToken> processedTokens;
+
+		while (mpLexer->HasNextToken()) // \note skip all tokens until #endif, #elif or #else
 		{
 			currToken = mpLexer->GetNextToken();
 
 			if (currToken.mType == E_TOKEN_TYPE::ENDIF)
 			{
+				mpLexer->AppendFront(processedTokens);
 				return;
 			}
 
-			if (currToken.mType == E_TOKEN_TYPE::ELSE || currToken.mType == E_TOKEN_TYPE::ELIF)
+			if (expressionResult)
 			{
-				break;
+				processedTokens.push_back(currToken);
+			}
+
+			if (currToken.mType == E_TOKEN_TYPE::ELSE)
+			{
+				if (elseBranchFound) // \note allow the only #else branch between #if and #endif directives
+				{
+					mOnErrorCallback();
+					return;
+				}
+
+				expressionResult = !expressionResult;
+				elseBranchFound = true;
+				continue;
+			}
+
+			if (currToken.mType == E_TOKEN_TYPE::ELIF)
+			{
+				if (elseBranchFound) // \note #else branch should be last directive before #endif
+				{
+					mOnErrorCallback();
+					return;
+				}
+
+				expressionTokens.clear();
+
+				currToken = mpLexer->GetNextToken();
+				_expect(E_TOKEN_TYPE::SPACE, currToken.mType);
+
+				while ((currToken = mpLexer->GetNextToken()).mType != E_TOKEN_TYPE::NEWLINE)
+				{
+					expressionTokens.push_back(currToken);
+				}
+
+				_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
+
+				expressionResult = _evaluateExpression(expressionTokens);
+				continue;
 			}
 		}
 	}
 	
-	bool Preprocessor::_evaluateExpression(const std::vector<TToken>& exprTokens) const TCPP_NOEXCEPT
+	int Preprocessor::_evaluateExpression(const std::vector<TToken>& exprTokens) const TCPP_NOEXCEPT
 	{
-		return false;
+		size_t pos = 0;
+
+		std::vector<TToken> tokens{ exprTokens.begin(), exprTokens.end() };
+		tokens.push_back({ E_TOKEN_TYPE::END });
+
+		// \note use recursive descent parsing technique to evaluate expression
+		auto evalCall = [this, &tokens]()
+		{
+			return 0;
+		};
+
+		auto evalPrimary = [this, &tokens, &evalCall]()
+		{
+			auto currToken = tokens.front();
+
+			switch (currToken.mType)
+			{
+				case E_TOKEN_TYPE::IDENTIFIER:
+					{
+						// \note macro call
+						if (tokens.size() >= 2 && tokens[1].mType == E_TOKEN_TYPE::OPEN_BRACKET)
+						{
+							return evalCall();
+						}
+
+						tokens.erase(tokens.cbegin());
+
+						// \note simple identifier
+						return static_cast<int>(std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&currToken](auto&& item)
+						{
+							return item.mName == currToken.mRawView;
+						}) != mSymTable.cend());
+					}
+				case E_TOKEN_TYPE::NUMBER:
+					tokens.erase(tokens.cbegin());
+					return std::stoi(currToken.mRawView);
+			}
+			
+			return 0;
+		};
+
+		auto evalUnary = [this, &tokens, &evalPrimary]()
+		{
+			int result = evalPrimary();
+
+			auto currToken = tokens.front();
+			switch (currToken.mType)
+			{
+				case E_TOKEN_TYPE::MINUS:
+					result = -result;
+					break;
+				case E_TOKEN_TYPE::NOT:
+					result = !result;
+					break;
+			}
+
+			return result;
+		};
+
+		auto evalMultiplication = [this, &tokens, &evalUnary]()
+		{
+			int result = evalUnary();
+
+			TToken currToken;
+			while ((currToken = tokens.front()).mType == E_TOKEN_TYPE::STAR || currToken.mType == E_TOKEN_TYPE::SLASH)
+			{
+				switch (currToken.mType)
+				{
+					case E_TOKEN_TYPE::STAR:
+						result = result * evalUnary();
+						break;
+					case E_TOKEN_TYPE::SLASH:
+						result = result / evalUnary();
+						break;
+				}
+			}
+
+			return result;
+		};
+
+		auto evalAddition = [this, &tokens, &evalMultiplication]()
+		{
+			int result = evalMultiplication();
+
+			TToken currToken;
+			while ((currToken = tokens.front()).mType == E_TOKEN_TYPE::PLUS || currToken.mType == E_TOKEN_TYPE::MINUS)
+			{
+				switch (currToken.mType)
+				{
+					case E_TOKEN_TYPE::PLUS:
+						result = result + evalMultiplication();
+						break;
+					case E_TOKEN_TYPE::MINUS:
+						result = result - evalMultiplication();
+						break;
+				}
+			}
+
+			return result;
+		};
+
+		auto evalComparison = [this, &tokens, &evalAddition]()
+		{
+			int result = evalAddition();
+
+			TToken currToken;
+			while ((currToken = tokens.front()).mType == E_TOKEN_TYPE::LESS || 
+					currToken.mType == E_TOKEN_TYPE::GREATER || 
+					currToken.mType == E_TOKEN_TYPE::LE || 
+					currToken.mType == E_TOKEN_TYPE::GE)
+			{
+				switch (currToken.mType)
+				{
+					case E_TOKEN_TYPE::LESS:
+						result = result < evalAddition();
+						break;
+					case E_TOKEN_TYPE::GREATER:
+						result = result > evalAddition();
+						break;
+					case E_TOKEN_TYPE::LE:
+						result = result <= evalAddition();
+						break;
+					case E_TOKEN_TYPE::GE:
+						result = result >= evalAddition();
+						break;
+				}
+			}
+
+			return result;
+		};
+
+		auto evalEquality = [this, &tokens, &evalComparison]()
+		{
+			int result = evalComparison();
+
+			TToken currToken;
+			while ((currToken = tokens.front()).mType == E_TOKEN_TYPE::EQ || currToken.mType == E_TOKEN_TYPE::NE)
+			{
+				switch (currToken.mType)
+				{
+					case E_TOKEN_TYPE::EQ:
+						result = result == evalComparison();
+						break;
+					case E_TOKEN_TYPE::NE:
+						result = result != evalComparison();
+						break;
+				}
+			}
+
+			return result;
+		};
+
+		auto evalAndExpr = [this, &tokens, &evalEquality]()
+		{
+			int result = evalEquality();
+
+			while (tokens.front().mType == E_TOKEN_TYPE::AND)
+			{
+				result = result && evalEquality();
+			}
+
+			return result;
+		};
+
+		auto evalOrExpr = [this, &tokens, &evalAndExpr]()
+		{
+			int result = evalAndExpr();
+			
+			while (tokens.front().mType == E_TOKEN_TYPE::OR)
+			{
+				result = result || evalAndExpr();
+			}
+
+			return result;
+		};
+
+		return evalOrExpr();
 	}
 
 #endif

@@ -102,4 +102,44 @@ TEST_CASE("Preprocessor Tests")
 		Preprocessor preprocessor(lexer, errorCallback);
 		REQUIRE(preprocessor.Process() == "");
 	}
+
+	SECTION("TestProcess_PassSourceWithConditionalBlocks_ReturnsSourceWithoutIfBlock")
+	{
+		std::string inputSource = "#if FOO\n // this block will be skiped\n if block\n#else\n else block #endif";
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		Preprocessor preprocessor(lexer, errorCallback);
+		REQUIRE(preprocessor.Process() == "\n else block ");
+	}
+	
+	SECTION("TestProcess_PassSourceWithConditionalBlocks_ReturnsSourceWithoutElseBlock")
+	{
+		std::string inputSource = "#if 1\n if block\n#else\n else block #endif";
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		Preprocessor preprocessor(lexer, errorCallback);
+		REQUIRE(preprocessor.Process() == " if block\n");
+	}
+
+	SECTION("TestProcess_PassSourceWithElifBlocks_ReturnsSourceWithElabledElifBlock")
+	{
+		std::string inputSource = "#if 0\none\n#elif 1\ntwo\n#else\nthree\n#endif";
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		Preprocessor preprocessor(lexer, errorCallback);
+		REQUIRE(preprocessor.Process() == "two\n");
+	}
+
+	SECTION("TestProcess_PassSourceWithFewElifBlocks_ReturnsSourceWithElabledElifBlock")
+	{
+		std::string inputSource = "#if 0\none\n#elif 0\ntwo\n#elif 1\nthree\n#else\nfour\n#endif";
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		Preprocessor preprocessor(lexer, errorCallback);
+		REQUIRE(preprocessor.Process() == "three\n");
+	}
 }
