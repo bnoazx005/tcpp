@@ -85,7 +85,7 @@ TEST_CASE("Lexer Tests")
 
 	SECTION("TestGetNextToken_PassStreamWithSeparators_ReturnsTheirTokens")
 	{
-		MockInputStream input({ ",()<>\"&|+-*\/&&||<<>>"});
+		MockInputStream input({ ",()<>\"&|+-*/&&||<<>>!<=>===!="});
 		Lexer lexer(input);
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::COMMA);
@@ -104,6 +104,11 @@ TEST_CASE("Lexer Tests")
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::OR);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::LSHIFT);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::RSHIFT);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NOT);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::LE);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::GE);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::EQ);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NE);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
 

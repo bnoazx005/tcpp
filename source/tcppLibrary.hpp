@@ -98,6 +98,9 @@ namespace tcpp
 		UNDEF,
 		ENDIF,
 		INCLUDE,
+		DEFINED,
+		IFNDEF,
+		IFDEF,
 		SPACE,
 		BLOB,
 		OPEN_BRACKET,
@@ -123,6 +126,11 @@ namespace tcpp
 		VLINE,
 		LSHIFT,
 		RSHIFT,
+		NOT,
+		GE,
+		LE,
+		EQ,
+		NE,
 		UNKNOWN,
 	};
 
@@ -349,6 +357,9 @@ namespace tcpp
 			{ "undef", E_TOKEN_TYPE::UNDEF },
 			{ "endif", E_TOKEN_TYPE::ENDIF },
 			{ "include", E_TOKEN_TYPE::INCLUDE },
+			{ "defined", E_TOKEN_TYPE::DEFINED },
+			{ "ifdef", E_TOKEN_TYPE::IFDEF },
+			{ "ifndef", E_TOKEN_TYPE::IFNDEF },
 		};
 
 		static const std::unordered_set<std::string> keywordsMap
@@ -363,7 +374,7 @@ namespace tcpp
 			"do", "if", "static", "while"
 		};
 
-		static const std::string separators = ",()<>\"+-*\/&|";
+		static const std::string separators = ",()<>\"+-*/&|!=";
 
 		std::string currStr = "";
 
@@ -653,18 +664,34 @@ namespace tcpp
 			case ')':
 				return { E_TOKEN_TYPE::CLOSE_BRACKET, ")", mCurrLineIndex };
 			case '<':
-				if (!inputLine.empty() && inputLine.front() == '<')
+				if (!inputLine.empty())
 				{
-					inputLine.erase(0, 1);
-					return { E_TOKEN_TYPE::LSHIFT, "<<", mCurrLineIndex };
+					char nextCh = inputLine.front();
+					switch (nextCh)
+					{
+						case '<':
+							inputLine.erase(0, 1);
+							return { E_TOKEN_TYPE::LSHIFT, "<<", mCurrLineIndex };
+						case '=':
+							inputLine.erase(0, 1);
+							return { E_TOKEN_TYPE::LE, "<=", mCurrLineIndex };
+					}					
 				}
 
 				return { E_TOKEN_TYPE::LESS, "<", mCurrLineIndex };
 			case '>':
-				if (!inputLine.empty() && inputLine.front() == '>')
+				if (!inputLine.empty())
 				{
-					inputLine.erase(0, 1);
-					return { E_TOKEN_TYPE::RSHIFT, ">>", mCurrLineIndex };
+					char nextCh = inputLine.front();
+					switch (nextCh)
+					{
+						case '>':
+							inputLine.erase(0, 1);
+							return { E_TOKEN_TYPE::RSHIFT, ">>", mCurrLineIndex };
+						case '=':
+							inputLine.erase(0, 1);
+							return { E_TOKEN_TYPE::GE, ">=", mCurrLineIndex };
+					}
 				}
 
 				return { E_TOKEN_TYPE::GREATER, ">", mCurrLineIndex };
@@ -694,6 +721,22 @@ namespace tcpp
 				}
 
 				return { E_TOKEN_TYPE::VLINE, "|", mCurrLineIndex };
+			case '!':
+				if (!inputLine.empty() && inputLine.front() == '=')
+				{
+					inputLine.erase(0, 1);
+					return { E_TOKEN_TYPE::NE, "!=", mCurrLineIndex };
+				}
+
+				return { E_TOKEN_TYPE::NOT, "!", mCurrLineIndex };
+			case '=':
+				if (!inputLine.empty() && inputLine.front() == '=')
+				{
+					inputLine.erase(0, 1);
+					return { E_TOKEN_TYPE::EQ, "==", mCurrLineIndex };
+				}
+
+				return { E_TOKEN_TYPE::BLOB, "=", mCurrLineIndex };
 		}
 
 		return mEOFToken;
