@@ -109,8 +109,10 @@ namespace tcpp
 		QUOTES,
 		KEYWORD,
 		END,
-		UNKNOWN,
 		REJECT_MACRO, ///< Special type of a token to provide meta information 
+		STRINGIZE_OP,
+		CONCAT_OP,
+		UNKNOWN,
 	};
 
 
@@ -397,8 +399,26 @@ namespace tcpp
 					}
 				}
 
+				inputLine.erase(0, 1);
+
 				// \note if we've reached this line it's # operator not directive
-				TCPP_ASSERT(false);
+				if (!inputLine.empty())
+				{
+					char nextCh = inputLine.front();
+					switch (nextCh)
+					{
+						case '#':	// \note concatenation operator
+							inputLine.erase(0, 1);
+							return { E_TOKEN_TYPE::CONCAT_OP, "", mCurrLineIndex };
+						default:
+							if (nextCh != ' ') // \note stringification operator
+							{
+								return { E_TOKEN_TYPE::STRINGIZE_OP, "", mCurrLineIndex };
+							}
+
+							return { E_TOKEN_TYPE::BLOB, "#", mCurrLineIndex };
+					}
+				}
 			}
 
 			if (std::isalpha(ch)) ///< \note try to parse a keyword
@@ -627,32 +647,39 @@ namespace tcpp
 					_processInclusion();
 					break;
 				case E_TOKEN_TYPE::IDENTIFIER: // \note try to expand some macro here
-				{
-					auto iter = std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&currToken](auto&& item)
 					{
-						return item.mName == currToken.mRawView;
-					});
+						auto iter = std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&currToken](auto&& item)
+						{
+							return item.mName == currToken.mRawView;
+						});
 
-					auto contextIter = std::find_if(mContextStack.cbegin(), mContextStack.cend(), [&currToken](auto&& item)
-					{
-						return item == currToken.mRawView;
-					});
+						auto contextIter = std::find_if(mContextStack.cbegin(), mContextStack.cend(), [&currToken](auto&& item)
+						{
+							return item == currToken.mRawView;
+						});
 
-					if (iter != mSymTable.cend() && contextIter == mContextStack.cend())
-					{
-						mpLexer->AppendFront(_expandMacroDefinition(*iter, currToken));
+						if (iter != mSymTable.cend() && contextIter == mContextStack.cend())
+						{
+							mpLexer->AppendFront(_expandMacroDefinition(*iter, currToken));
+						}
+						else
+						{
+							processedStr.append(currToken.mRawView);
+						}
 					}
-					else
-					{
-						processedStr.append(currToken.mRawView);
-					}
-				}
-				break;
+					break;
 				case E_TOKEN_TYPE::REJECT_MACRO:
 					mContextStack.erase(std::remove_if(mContextStack.begin(), mContextStack.end(), [&currToken](auto&& item)
 					{
 						return item == currToken.mRawView;
 					}), mContextStack.end());
+					break;
+				case E_TOKEN_TYPE::CONCAT_OP:
+					// this feature doesn't work for now
+					processedStr.append((currToken = mpLexer->GetNextToken()).mRawView);
+					break;
+				case E_TOKEN_TYPE::STRINGIZE_OP:
+					processedStr.append((currToken = mpLexer->GetNextToken()).mRawView);
 					break;
 				default:
 					processedStr.append(currToken.mRawView);

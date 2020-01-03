@@ -245,4 +245,21 @@ TEST_CASE("Lexer Tests")
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
+
+	SECTION("TestGetNextToken_PassStreamWithStringificationOperators_ReturnsCorrespondingTokens")
+	{
+		MockInputStream input({ "# ID", "#ID", "##" });
+		Lexer lexer(input);
+
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::BLOB);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
+
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::STRINGIZE_OP);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
+
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::CONCAT_OP);
+
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
+	}
 }

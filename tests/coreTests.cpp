@@ -72,4 +72,24 @@ TEST_CASE("Preprocessor Tests")
 		Preprocessor preprocessor(lexer, errorCallback);
 		REQUIRE(preprocessor.Process() == "1\n2\n3");
 	}
+
+	SECTION("TestProcess_PassSourceWithStringizeOperator_ReturnsSourceWithStringifiedToken")
+	{
+		std::string inputSource = "#define FOO(Name) #Name\n FOO(Text)";
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		Preprocessor preprocessor(lexer, errorCallback);
+		REQUIRE(preprocessor.Process() == " Text");
+	}
+
+	/*SECTION("TestProcess_PassSourceWithConcatenationOperator_ReturnsSourceWithConcatenatedTokens")
+	{
+		std::string inputSource = "#define CAT(X, Y) X ## Y\n CAT(4, 2)";
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		Preprocessor preprocessor(lexer, errorCallback);
+		REQUIRE(preprocessor.Process() == " 42");
+	}*/
 }
