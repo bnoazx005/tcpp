@@ -142,4 +142,21 @@ TEST_CASE("Preprocessor Tests")
 		Preprocessor preprocessor(lexer, errorCallback);
 		REQUIRE(preprocessor.Process() == "three\n");
 	}
+
+	SECTION("TestProcess_PassSourceWithInvalidElseBlock_ReturnsError")
+	{
+		std::string inputSource = "#if 0\none\n#elif 0\ntwo\n#else\nfour\n#elif 1\nthree\n#endif";
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		bool result = false;
+
+		Preprocessor preprocessor(lexer, [&result]()
+		{
+			result = true;
+		}); 
+
+		preprocessor.Process();
+		REQUIRE(result);
+	}
 }

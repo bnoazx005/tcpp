@@ -16,6 +16,17 @@
 		#define TCPP_IMPLEMENTATION
 		#include "tcppLibrary.hpp"
 	\endcode
+
+	Because of the initial goal of the project wasn't full featured C preprocessor but its subset
+	that's useful for GLSL and HLSL, some points from the specification of the C preprocessor could
+	not be applied to this library, at least for now. There is a list of unimplemented features placed
+	below
+
+	\todo Implement support of char literals
+	\todo Improve existing performance for massive input files
+	\todo Add support of integral literals like L, u, etc
+	\todo Implement built-in directives like #pragma, #error and others
+	\todo Provide support of variadic macros
 */
 
 #pragma once
