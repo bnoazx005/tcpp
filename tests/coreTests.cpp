@@ -199,4 +199,14 @@ TEST_CASE("Preprocessor Tests")
 		Preprocessor preprocessor(lexer, errorCallback);
 		REQUIRE(preprocessor.Process() == "one\n\ntwo");
 	}
+
+	SECTION("TestProcess_PassSource_ReturnsProcessedSource")
+	{
+		std::string inputSource = "#define FOO\n#ifdef FOO\none\n#endif";
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		Preprocessor preprocessor(lexer, errorCallback);
+		REQUIRE(preprocessor.Process() == "one\n");
+	}
 }

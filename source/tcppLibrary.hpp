@@ -1190,12 +1190,14 @@ namespace tcpp
 		currToken = mpLexer->GetNextToken();
 		_expect(E_TOKEN_TYPE::IDENTIFIER, currToken.mType);
 
+		std::string macroIdentifier = currToken.mRawView;
+
 		currToken = mpLexer->GetNextToken();
 		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
 
-		return { std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&currToken](auto&& item) 
+		return { std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&macroIdentifier](auto&& item)
 								{
-									return item.mName == currToken.mRawView;
+									return item.mName == macroIdentifier;
 								}) == mSymTable.cend() };
 	}
 
@@ -1207,12 +1209,14 @@ namespace tcpp
 		currToken = mpLexer->GetNextToken();
 		_expect(E_TOKEN_TYPE::IDENTIFIER, currToken.mType);
 
+		std::string macroIdentifier = currToken.mRawView;
+
 		currToken = mpLexer->GetNextToken();
 		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
 
-		return { std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&currToken](auto&& item)
+		return { std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&macroIdentifier](auto&& item)
 								{
-									return item.mName == currToken.mRawView;
+									return item.mName == macroIdentifier;
 								}) != mSymTable.cend() };
 	}
 
