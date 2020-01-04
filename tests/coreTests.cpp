@@ -33,6 +33,16 @@ TEST_CASE("Preprocessor Tests")
 		std::cout << preprocessor.Process() << std::endl;
 	}
 
+	SECTION("TestProcess_PassSourceWithSimpleMacroWithoutValue_ReturnsSourceWithExpandedMacro")
+	{
+		std::string inputSource = "#define VALUE\nVALUE";
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		Preprocessor preprocessor(lexer, errorCallback);
+		REQUIRE(preprocessor.Process() == "1");
+	}
+
 	SECTION("TestProcess_PassSourceWithCorrectFuncMacro_ReturnsSourceWithExpandedMacro")
 	{
 		std::string inputSource = "#define ADD(X, Y) X + Y\n void main()\n{\n\treturn ADD(2, 3);\n}";

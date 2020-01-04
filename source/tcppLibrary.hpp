@@ -977,6 +977,9 @@ namespace tcpp
 			case E_TOKEN_TYPE::SPACE:	// object like macro
 				extractValue(macroDesc, *mpLexer);
 				break;
+			case E_TOKEN_TYPE::NEWLINE:
+				macroDesc.mValue.push_back({ E_TOKEN_TYPE::NUMBER, "1", mpLexer->GetCurrLineIndex() });
+				break;
 			case E_TOKEN_TYPE::OPEN_BRACKET: // function line macro
 				{
 					// \note parse arguments
