@@ -95,8 +95,6 @@ namespace tcpp
 			bool HasNextLine() const TCPP_NOEXCEPT override;
 		private:
 			std::string mSourceStr;
-
-			std::string::size_type mPos;
 	};
 
 
@@ -312,6 +310,8 @@ namespace tcpp
 			void _processElifConditional(TIfStackEntry& currStackEntry) TCPP_NOEXCEPT;
 
 			int _evaluateExpression(const std::vector<TToken>& exprTokens) const TCPP_NOEXCEPT;
+
+			bool _shouldTokenBeSkipped() const TCPP_NOEXCEPT;
 		private:
 			Lexer* mpLexer;
 			TOnErrorCallback mOnErrorCallback;
@@ -357,21 +357,24 @@ namespace tcpp
 
 
 	StringInputStream::StringInputStream(const std::string& source) TCPP_NOEXCEPT:
-	IInputStream(), mSourceStr(source), mPos(0)
+		IInputStream(), mSourceStr(source)
 	{
 	}
 
 	std::string StringInputStream::ReadLine() TCPP_NOEXCEPT
 	{
-		std::string::size_type prevPos = mPos ? (mPos + 1) : 0;
-		mPos = mSourceStr.find_first_of('\n', prevPos);
+		std::string::size_type pos = mSourceStr.find_first_of('\n');
+		pos = (pos == std::string::npos) ? pos : (pos + 1);
 
-		return mSourceStr.substr(prevPos, (mPos != std::string::npos) ? (mPos - prevPos + 1) : (mSourceStr.length() - prevPos + 1));
+		std::string currLine = mSourceStr.substr(0, pos);
+		mSourceStr.erase(0, pos);
+
+		return currLine;
 	}
 
 	bool StringInputStream::HasNextLine() const TCPP_NOEXCEPT
 	{
-		return (mSourceStr.find_first_of("\n\r", mPos) != std::string::npos);
+		return !mSourceStr.empty();
 	}
 
 
@@ -849,10 +852,12 @@ namespace tcpp
 
 		auto appendString = [&processedStr, this](const std::string& str)
 		{
-			if (mConditionalBlocksStack.empty() || !mConditionalBlocksStack.top().mShouldBeSkipped)
+			if (_shouldTokenBeSkipped())
 			{
-				processedStr.append(str);
+				return;
 			}
+
+			processedStr.append(str);
 		};
 
 		// \note first stage of preprocessing, expand macros and include directives
@@ -1010,6 +1015,11 @@ namespace tcpp
 				mOnErrorCallback({ E_ERROR_TYPE::INVALID_MACRO_DEFINITION, mpLexer->GetCurrLineIndex() });
 				break;
 		}
+		
+		if (_shouldTokenBeSkipped())
+		{
+			return;
+		}
 
 		if (std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&macroDesc](auto&& item) { return item.mName == macroDesc.mName; }) != mSymTable.cend())
 		{
@@ -1022,6 +1032,11 @@ namespace tcpp
 
 	void Preprocessor::_removeMacroDefinition(const std::string& macroName) TCPP_NOEXCEPT
 	{
+		if (_shouldTokenBeSkipped())
+		{
+			return;
+		}
+
 		auto iter = std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&macroName](auto&& item) { return item.mName == macroName; });
 		if (iter == mSymTable.cend())
 		{
@@ -1434,6 +1449,11 @@ namespace tcpp
 		};
 
 		return evalOrExpr();
+	}
+
+	bool Preprocessor::_shouldTokenBeSkipped() const TCPP_NOEXCEPT
+	{
+		return !mConditionalBlocksStack.empty() && mConditionalBlocksStack.top().mShouldBeSkipped;
 	}
 
 #endif

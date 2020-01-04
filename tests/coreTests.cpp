@@ -209,4 +209,38 @@ TEST_CASE("Preprocessor Tests")
 		Preprocessor preprocessor(lexer, errorCallback);
 		REQUIRE(preprocessor.Process() == "one\n");
 	}
+
+	SECTION("TestProcess_PassSourceWithIncludeGuards_ReturnsProcessedSource")
+	{
+		std::string inputSource = R"(
+			#define FOO
+
+			#ifndef FILE_H
+			#define FILE_H
+
+			#ifdef FOO
+				#define BAR(x) x
+			#endif
+
+			#ifdef FOO2
+				#define BAR(x) x,x
+			#endif
+
+			#endif
+		)";
+
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		});
+
+		preprocessor.Process();
+		REQUIRE(result);
+	}
 }

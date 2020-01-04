@@ -45,4 +45,41 @@ TEST_CASE("StringInputStream Tests")
 		StringInputStream stringInputStream(expectedLine);
 		REQUIRE(stringInputStream.ReadLine() == expectedLine);
 	}
+
+	SECTION("TestReadLine_PassComplexString_ReturnsAllItsLines")
+	{
+		std::string lines[]
+		{
+			"\n",
+			"#define FOO\n",
+			"\n",
+			"#ifndef FILE_H\n",
+			"#define FILE_H\n",
+			"\n",
+			"#ifdef FOO\n",
+			"	#define BAR(x) x\n",
+			"#endif\n",
+			"\n",
+			"#ifdef FOO2\n",
+			"	#define BAR(x) x,x\n",
+			"#endif\n",
+			"\n",
+			"#endif\n",
+		};
+
+		std::string inputSource;
+
+		for (const auto& currLine : lines)
+		{
+			inputSource.append(currLine);
+		}
+
+		StringInputStream stringInputStream(inputSource);
+
+		for (auto& currLine : lines)
+		{
+			auto readLine = stringInputStream.ReadLine();
+			REQUIRE(readLine == currLine);
+		}
+	}
 }
