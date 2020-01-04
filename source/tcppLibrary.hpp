@@ -244,6 +244,14 @@ namespace tcpp
 			using TOnIncludeCallback = std::function<IInputStream*(const std::string&, bool)>;
 			using TSymTable = std::vector<TMacroDesc>;
 			using TContextStack = std::list<std::string>;
+
+			typedef struct TIfStackEntry
+			{
+				bool mShouldBeSkipped = true;
+				bool mHasElseBeenFound = false;
+			} TIfStackEntry, *TIfStackEntryPtr;
+
+			using TIfStack = std::stack<TIfStackEntry>;
 		public:
 			Preprocessor() TCPP_NOEXCEPT = delete;
 			Preprocessor(const Preprocessor&) TCPP_NOEXCEPT = delete;
@@ -265,7 +273,11 @@ namespace tcpp
 
 			void _processInclusion() TCPP_NOEXCEPT;
 
-			void _processIfConditional() TCPP_NOEXCEPT;
+			TIfStackEntry _processIfConditional() TCPP_NOEXCEPT;
+			TIfStackEntry _processIfdefConditional() TCPP_NOEXCEPT;
+			TIfStackEntry _processIfndefConditional() TCPP_NOEXCEPT;
+			void _processElseConditional(TIfStackEntry& currStackEntry) TCPP_NOEXCEPT;
+			void _processElifConditional(TIfStackEntry& currStackEntry) TCPP_NOEXCEPT;
 
 			int _evaluateExpression(const std::vector<TToken>& exprTokens) const TCPP_NOEXCEPT;
 		private:
@@ -274,6 +286,7 @@ namespace tcpp
 			TOnIncludeCallback mOnIncludeCallback;
 			TSymTable mSymTable;
 			TContextStack mContextStack;
+			TIfStack mConditionalBlocksStack;
 	};
 
 
@@ -362,6 +375,8 @@ namespace tcpp
 		static const std::vector<std::tuple<std::string, E_TOKEN_TYPE>> directives
 		{
 			{ "define", E_TOKEN_TYPE::DEFINE },
+			{ "ifdef", E_TOKEN_TYPE::IFDEF },
+			{ "ifndef", E_TOKEN_TYPE::IFNDEF },
 			{ "if", E_TOKEN_TYPE::IF },
 			{ "else", E_TOKEN_TYPE::ELSE },
 			{ "elif", E_TOKEN_TYPE::ELIF },
@@ -369,8 +384,6 @@ namespace tcpp
 			{ "endif", E_TOKEN_TYPE::ENDIF },
 			{ "include", E_TOKEN_TYPE::INCLUDE },
 			{ "defined", E_TOKEN_TYPE::DEFINED },
-			{ "ifdef", E_TOKEN_TYPE::IFDEF },
-			{ "ifndef", E_TOKEN_TYPE::IFNDEF },
 		};
 
 		static const std::unordered_set<std::string> keywordsMap
@@ -771,6 +784,14 @@ namespace tcpp
 
 		std::string processedStr;
 
+		auto appendString = [&processedStr, this](const std::string& str)
+		{
+			if (mConditionalBlocksStack.empty() || !mConditionalBlocksStack.top().mShouldBeSkipped)
+			{
+				processedStr.append(str);
+			}
+		};
+
 		// \note first stage of preprocessing, expand macros and include directives
 		while (mpLexer->HasNextToken())
 		{
@@ -787,9 +808,29 @@ namespace tcpp
 					_removeMacroDefinition(currToken.mRawView);
 					break;
 				case E_TOKEN_TYPE::IF:
-					_processIfConditional();
+					mConditionalBlocksStack.push(_processIfConditional());
+					break;
+				case E_TOKEN_TYPE::IFNDEF:
+					mConditionalBlocksStack.push(_processIfndefConditional());
+					break;
+				case E_TOKEN_TYPE::IFDEF:
+					mConditionalBlocksStack.push(_processIfdefConditional());
+					break;
+				case E_TOKEN_TYPE::ELIF:
+					_processElifConditional(mConditionalBlocksStack.top());
+					break;
+				case E_TOKEN_TYPE::ELSE:
+					_processElseConditional(mConditionalBlocksStack.top());
 					break;
 				case E_TOKEN_TYPE::ENDIF:
+					if (mConditionalBlocksStack.empty())
+					{
+						mOnErrorCallback();
+					}
+					else
+					{
+						mConditionalBlocksStack.pop();
+					}
 					break;
 				case E_TOKEN_TYPE::INCLUDE:
 					_processInclusion();
@@ -812,7 +853,7 @@ namespace tcpp
 						}
 						else
 						{
-							processedStr.append(currToken.mRawView);
+							appendString(currToken.mRawView);
 						}
 					}
 					break;
@@ -824,13 +865,13 @@ namespace tcpp
 					break;
 				case E_TOKEN_TYPE::CONCAT_OP:
 					// this feature doesn't work for now
-					processedStr.append((currToken = mpLexer->GetNextToken()).mRawView);
+					appendString((currToken = mpLexer->GetNextToken()).mRawView);
 					break;
 				case E_TOKEN_TYPE::STRINGIZE_OP:
-					processedStr.append((currToken = mpLexer->GetNextToken()).mRawView);
+					appendString((currToken = mpLexer->GetNextToken()).mRawView);
 					break;
 				default:
-					processedStr.append(currToken.mRawView);
+					appendString(currToken.mRawView);
 					break;
 			}
 		}
@@ -1057,7 +1098,7 @@ namespace tcpp
 		mpLexer->PushStream(*pInputStream);
 	}
 
-	void Preprocessor::_processIfConditional() TCPP_NOEXCEPT
+	Preprocessor::TIfStackEntry Preprocessor::_processIfConditional() TCPP_NOEXCEPT
 	{
 		auto currToken = mpLexer->GetNextToken();
 		_expect(E_TOKEN_TYPE::SPACE, currToken.mType);
@@ -1071,65 +1112,79 @@ namespace tcpp
 
 		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
 		
-		bool expressionResult = _evaluateExpression(expressionTokens);
-		bool elseBranchFound  = false;
-
-		std::vector<TToken> processedTokens;
-
-		while (mpLexer->HasNextToken()) // \note skip all tokens until #endif, #elif or #else
-		{
-			currToken = mpLexer->GetNextToken();
-
-			if (currToken.mType == E_TOKEN_TYPE::ENDIF)
-			{
-				mpLexer->AppendFront(processedTokens);
-				return;
-			}
-
-			if (expressionResult)
-			{
-				processedTokens.push_back(currToken);
-			}
-
-			if (currToken.mType == E_TOKEN_TYPE::ELSE)
-			{
-				if (elseBranchFound) // \note allow the only #else branch between #if and #endif directives
-				{
-					mOnErrorCallback();
-					return;
-				}
-
-				expressionResult = !expressionResult;
-				elseBranchFound = true;
-				continue;
-			}
-
-			if (currToken.mType == E_TOKEN_TYPE::ELIF)
-			{
-				if (elseBranchFound) // \note #else branch should be last directive before #endif
-				{
-					mOnErrorCallback();
-					return;
-				}
-
-				expressionTokens.clear();
-
-				currToken = mpLexer->GetNextToken();
-				_expect(E_TOKEN_TYPE::SPACE, currToken.mType);
-
-				while ((currToken = mpLexer->GetNextToken()).mType != E_TOKEN_TYPE::NEWLINE)
-				{
-					expressionTokens.push_back(currToken);
-				}
-
-				_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
-
-				expressionResult = _evaluateExpression(expressionTokens);
-				continue;
-			}
-		}
+		return { static_cast<bool>(!_evaluateExpression(expressionTokens)) };
 	}
-	
+
+
+	Preprocessor::TIfStackEntry Preprocessor::_processIfdefConditional() TCPP_NOEXCEPT
+	{
+		auto currToken = mpLexer->GetNextToken();
+		_expect(E_TOKEN_TYPE::SPACE, currToken.mType);
+
+		currToken = mpLexer->GetNextToken();
+		_expect(E_TOKEN_TYPE::IDENTIFIER, currToken.mType);
+
+		currToken = mpLexer->GetNextToken();
+		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
+
+		return { std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&currToken](auto&& item) 
+								{
+									return item.mName == currToken.mRawView;
+								}) == mSymTable.cend() };
+	}
+
+	Preprocessor::TIfStackEntry Preprocessor::_processIfndefConditional() TCPP_NOEXCEPT
+	{
+		auto currToken = mpLexer->GetNextToken();
+		_expect(E_TOKEN_TYPE::SPACE, currToken.mType);
+
+		currToken = mpLexer->GetNextToken();
+		_expect(E_TOKEN_TYPE::IDENTIFIER, currToken.mType);
+
+		currToken = mpLexer->GetNextToken();
+		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
+
+		return { std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&currToken](auto&& item)
+								{
+									return item.mName == currToken.mRawView;
+								}) != mSymTable.cend() };
+	}
+
+	void Preprocessor::_processElseConditional(TIfStackEntry& currStackEntry) TCPP_NOEXCEPT
+	{
+		if (currStackEntry.mHasElseBeenFound)
+		{
+			mOnErrorCallback();
+			return;
+		}
+
+		currStackEntry.mShouldBeSkipped  = !currStackEntry.mShouldBeSkipped;
+		currStackEntry.mHasElseBeenFound = true;
+	}
+
+	void Preprocessor::_processElifConditional(TIfStackEntry& currStackEntry) TCPP_NOEXCEPT
+	{
+		if (currStackEntry.mHasElseBeenFound)
+		{
+			mOnErrorCallback();
+			return;
+		}
+
+		auto currToken = mpLexer->GetNextToken();
+		_expect(E_TOKEN_TYPE::SPACE, currToken.mType);
+
+		std::vector<TToken> expressionTokens;
+
+		while ((currToken = mpLexer->GetNextToken()).mType != E_TOKEN_TYPE::NEWLINE)
+		{
+			expressionTokens.push_back(currToken);
+		}
+
+		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
+
+		currStackEntry.mShouldBeSkipped = static_cast<bool>(!_evaluateExpression(expressionTokens));
+	}
+
 	int Preprocessor::_evaluateExpression(const std::vector<TToken>& exprTokens) const TCPP_NOEXCEPT
 	{
 		size_t pos = 0;
