@@ -94,7 +94,7 @@ namespace tcpp
 			std::string ReadLine() TCPP_NOEXCEPT override;
 			bool HasNextLine() const TCPP_NOEXCEPT override;
 		private:
-			const std::string* mpSourceStr;
+			std::string mSourceStr;
 
 			std::string::size_type mPos;
 	};
@@ -357,21 +357,21 @@ namespace tcpp
 
 
 	StringInputStream::StringInputStream(const std::string& source) TCPP_NOEXCEPT:
-	IInputStream(), mpSourceStr(&source), mPos(0)
+	IInputStream(), mSourceStr(source), mPos(0)
 	{
 	}
 
 	std::string StringInputStream::ReadLine() TCPP_NOEXCEPT
 	{
 		std::string::size_type prevPos = mPos ? (mPos + 1) : 0;
-		mPos = mpSourceStr->find_first_of('\n', prevPos);
+		mPos = mSourceStr.find_first_of('\n', prevPos);
 
-		return mpSourceStr->substr(prevPos, (mPos != std::string::npos) ? (mPos - prevPos + 1) : (mpSourceStr->length() - prevPos + 1));
+		return mSourceStr.substr(prevPos, (mPos != std::string::npos) ? (mPos - prevPos + 1) : (mSourceStr.length() - prevPos + 1));
 	}
 
 	bool StringInputStream::HasNextLine() const TCPP_NOEXCEPT
 	{
-		return (mpSourceStr->find_first_of("\n\r", mPos) != std::string::npos);
+		return (mSourceStr.find_first_of("\n\r", mPos) != std::string::npos);
 	}
 
 
