@@ -245,6 +245,9 @@ namespace tcpp
 	};
 
 
+	std::string ErrorTypeToString(const E_ERROR_TYPE& errorType) TCPP_NOEXCEPT;
+
+
 	/*!
 		struct TErrorInfo
 
@@ -321,6 +324,37 @@ namespace tcpp
 
 	///< implementation of the library is placed below
 #if defined(TCPP_IMPLEMENTATION)
+
+
+	std::string ErrorTypeToString(const E_ERROR_TYPE& errorType) TCPP_NOEXCEPT
+	{
+		switch (errorType)
+		{
+			case E_ERROR_TYPE::UNEXPECTED_TOKEN:
+				return "Unexpected token";
+			case E_ERROR_TYPE::UNBALANCED_ENDIF:
+				return "Unbalanced endif";
+			case E_ERROR_TYPE::INVALID_MACRO_DEFINITION:
+				return "Invalid macro definition";
+			case E_ERROR_TYPE::MACRO_ALREADY_DEFINED:
+				return "The macro is already defined";
+			case E_ERROR_TYPE::INCONSISTENT_MACRO_ARITY:
+				return "Inconsistent number of arguments between definition and invocation of the macro";
+			case E_ERROR_TYPE::UNDEFINED_MACRO:
+				return "Undefined macro";
+			case E_ERROR_TYPE::INVALID_INCLUDE_DIRECTIVE:
+				return "Invalid #include directive";
+			case E_ERROR_TYPE::UNEXPECTED_END_OF_INCLUDE_PATH:
+				return "Unexpected end of include path";
+			case E_ERROR_TYPE::ANOTHER_ELSE_BLOCK_FOUND:
+				return "#else directive should be last one";
+			case E_ERROR_TYPE::ELIF_BLOCK_AFTER_ELSE_FOUND:
+				return "#elif found after #else block";
+		}
+
+		return "";
+	}
+
 
 	StringInputStream::StringInputStream(const std::string& source) TCPP_NOEXCEPT:
 	IInputStream(), mpSourceStr(&source), mPos(0)
