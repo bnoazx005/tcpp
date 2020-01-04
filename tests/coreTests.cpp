@@ -8,7 +8,7 @@ using namespace tcpp;
 
 TEST_CASE("Preprocessor Tests")
 {
-	auto errorCallback = []()
+	auto errorCallback = [](const TErrorInfo&)
 	{
 		REQUIRE(false);
 	};
@@ -151,7 +151,7 @@ TEST_CASE("Preprocessor Tests")
 
 		bool result = false;
 
-		Preprocessor preprocessor(lexer, [&result]()
+		Preprocessor preprocessor(lexer, [&result](auto&&)
 		{
 			result = true;
 		}); 

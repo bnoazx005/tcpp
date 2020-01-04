@@ -229,6 +229,34 @@ namespace tcpp
 	} TMacroDesc, *TMacroDescPtr;
 
 
+	enum class E_ERROR_TYPE : unsigned int
+	{
+		UNEXPECTED_TOKEN,
+		UNBALANCED_ENDIF,
+		INVALID_MACRO_DEFINITION,
+		MACRO_ALREADY_DEFINED,
+		INCONSISTENT_MACRO_ARITY,
+		UNDEFINED_MACRO,
+		INVALID_INCLUDE_DIRECTIVE,
+		UNEXPECTED_END_OF_INCLUDE_PATH,
+		ANOTHER_ELSE_BLOCK_FOUND,
+		ELIF_BLOCK_AFTER_ELSE_FOUND,
+	};
+
+
+	/*!
+		struct TErrorInfo
+
+		\brief The type contains all information about happened error
+	*/
+
+	typedef struct TErrorInfo
+	{
+		E_ERROR_TYPE mType;
+		size_t mLine;
+	} TErrorInfo, *TErrorInfoPtr;
+
+
 	/*!
 		class Preprocessor
 
@@ -240,7 +268,7 @@ namespace tcpp
 	class Preprocessor
 	{
 		public:
-			using TOnErrorCallback = std::function<void()>;
+			using TOnErrorCallback = std::function<void(const TErrorInfo&)>;
 			using TOnIncludeCallback = std::function<IInputStream*(const std::string&, bool)>;
 			using TSymTable = std::vector<TMacroDesc>;
 			using TContextStack = std::list<std::string>;
@@ -772,7 +800,7 @@ namespace tcpp
 	}
 
 
-	Preprocessor::Preprocessor(Lexer& lexer, const std::function<void()>& onErrorCallback, const TOnIncludeCallback& onIncludeCallback) TCPP_NOEXCEPT:
+	Preprocessor::Preprocessor(Lexer& lexer, const TOnErrorCallback& onErrorCallback, const TOnIncludeCallback& onIncludeCallback) TCPP_NOEXCEPT:
 		mpLexer(&lexer), mOnErrorCallback(onErrorCallback), mOnIncludeCallback(onIncludeCallback)
 	{
 		mSymTable.push_back({ "__LINE__" });
@@ -825,7 +853,7 @@ namespace tcpp
 				case E_TOKEN_TYPE::ENDIF:
 					if (mConditionalBlocksStack.empty())
 					{
-						mOnErrorCallback();
+						mOnErrorCallback({ E_ERROR_TYPE::UNBALANCED_ENDIF, mpLexer->GetCurrLineIndex() });
 					}
 					else
 					{
@@ -941,13 +969,13 @@ namespace tcpp
 				}
 				break;
 			default:
-				mOnErrorCallback();
+				mOnErrorCallback({ E_ERROR_TYPE::INVALID_MACRO_DEFINITION, mpLexer->GetCurrLineIndex() });
 				break;
 		}
 
 		if (std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&macroDesc](auto&& item) { return item.mName == macroDesc.mName; }) != mSymTable.cend())
 		{
-			mOnErrorCallback();
+			mOnErrorCallback({ E_ERROR_TYPE::MACRO_ALREADY_DEFINED, mpLexer->GetCurrLineIndex() });
 			return;
 		}
 
@@ -959,7 +987,7 @@ namespace tcpp
 		auto iter = std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&macroName](auto&& item) { return item.mName == macroName; });
 		if (iter == mSymTable.cend())
 		{
-			mOnErrorCallback();
+			mOnErrorCallback({ E_ERROR_TYPE::UNDEFINED_MACRO, mpLexer->GetCurrLineIndex() });
 			return;
 		}
 
@@ -1013,7 +1041,7 @@ namespace tcpp
 
 		if (processingTokens.size() != macroDesc.mArgsNames.size())
 		{
-			mOnErrorCallback();
+			mOnErrorCallback({ E_ERROR_TYPE::INCONSISTENT_MACRO_ARITY, mpLexer->GetCurrLineIndex() });
 		}
 
 		// \note execute macro's expansion
@@ -1047,7 +1075,7 @@ namespace tcpp
 			return;
 		}
 
-		mOnErrorCallback();
+		mOnErrorCallback({ E_ERROR_TYPE::UNEXPECTED_TOKEN, mpLexer->GetCurrLineIndex() });
 	}
 
 	void Preprocessor::_processInclusion() TCPP_NOEXCEPT
@@ -1060,7 +1088,7 @@ namespace tcpp
 		{
 			while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::NEWLINE); // \note skip to end of current line
 
-			mOnErrorCallback();
+			mOnErrorCallback({ E_ERROR_TYPE::INVALID_INCLUDE_DIRECTIVE, mpLexer->GetCurrLineIndex() });
 			return;
 		}
 
@@ -1078,7 +1106,7 @@ namespace tcpp
 
 			if (currToken.mType == E_TOKEN_TYPE::NEWLINE)
 			{
-				mOnErrorCallback();
+				mOnErrorCallback({ E_ERROR_TYPE::UNEXPECTED_END_OF_INCLUDE_PATH, mpLexer->GetCurrLineIndex() });
 				break;
 			}
 
@@ -1154,7 +1182,7 @@ namespace tcpp
 	{
 		if (currStackEntry.mHasElseBeenFound)
 		{
-			mOnErrorCallback();
+			mOnErrorCallback({ E_ERROR_TYPE::ANOTHER_ELSE_BLOCK_FOUND, mpLexer->GetCurrLineIndex() });
 			return;
 		}
 
@@ -1166,7 +1194,7 @@ namespace tcpp
 	{
 		if (currStackEntry.mHasElseBeenFound)
 		{
-			mOnErrorCallback();
+			mOnErrorCallback({ E_ERROR_TYPE::ELIF_BLOCK_AFTER_ELSE_FOUND, mpLexer->GetCurrLineIndex() });
 			return;
 		}
 
