@@ -290,4 +290,13 @@ TEST_CASE("Lexer Tests")
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
+
+	SECTION("TestGetNextToken_PassStreamWithKeywordLikeIdentifier_ReturnsIdentifierToken")
+	{
+		MockInputStream input({ "float4x4" });
+		Lexer lexer(input);
+
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
+	}
 }

@@ -575,27 +575,6 @@ namespace tcpp
 				return { E_TOKEN_TYPE::NUMBER, number, mCurrLineIndex };
 			}
 
-			if (std::isalpha(ch)) ///< \note try to parse a keyword
-			{
-				char savedCh = ch;
-
-				std::string keyword;
-				std::string::size_type i = 0;
-
-				do
-				{
-					keyword.push_back(ch);
-				} while ((i < inputLine.length()) && std::isalpha(ch = inputLine[++i]));
-
-				if (keywordsMap.find(keyword) != keywordsMap.cend())
-				{
-					inputLine.erase(0, keyword.length());
-					return { E_TOKEN_TYPE::KEYWORD, keyword, mCurrLineIndex };
-				}
-
-				ch = savedCh; // restore previous state
-			}
-
 			if (ch == '_' || std::isalpha(ch)) ///< \note parse identifier
 			{
 				// flush current blob
@@ -612,7 +591,7 @@ namespace tcpp
 					inputLine.erase(0, 1);
 				} while (!inputLine.empty() && (std::isalnum(ch = inputLine.front()) || (ch == '_')));
 
-				return { E_TOKEN_TYPE::IDENTIFIER, identifier, mCurrLineIndex };
+				return { (keywordsMap.find(identifier) != keywordsMap.cend()) ? E_TOKEN_TYPE::KEYWORD : E_TOKEN_TYPE::IDENTIFIER, identifier, mCurrLineIndex };
 			}
 
 			inputLine.erase(0, 1);
