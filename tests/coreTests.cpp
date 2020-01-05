@@ -274,4 +274,22 @@ TEST_CASE("Preprocessor Tests")
 		preprocessor.Process();
 		REQUIRE(result);
 	}
+
+	SECTION("TestProcess_PassSourceWithFunctionMacro_ReturnsProcessedSource")
+	{
+		std::string inputSource = "#define FOO(X, Y) Foo.getValue(X, Y)\nFOO(42, input.value)";
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		});
+
+		std::cout << preprocessor.Process() << std::endl;
+		REQUIRE(result);
+	}
 }

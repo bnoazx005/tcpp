@@ -1083,21 +1083,38 @@ namespace tcpp
 		auto currToken = mpLexer->GetNextToken();
 		_expect(E_TOKEN_TYPE::OPEN_BRACKET, currToken.mType);
 
-		std::vector<TToken> processingTokens;
+		std::vector<std::vector<TToken>> processingTokens;
+		std::vector<TToken> currArgTokens;
 
 		// \note read all arguments values
 		while (true)
 		{
+			currArgTokens.clear();
+
 			while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
-			processingTokens.push_back(currToken);
+			currArgTokens.push_back({ currToken });
 
 			while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE);
+			
+			while (currToken.mType != E_TOKEN_TYPE::COMMA &&
+				   currToken.mType != E_TOKEN_TYPE::NEWLINE &&
+				   currToken.mType != E_TOKEN_TYPE::CLOSE_BRACKET)
+			{
+				currArgTokens.push_back({ currToken });
+				currToken = mpLexer->GetNextToken();
+			}
+
+			if (currToken.mType != E_TOKEN_TYPE::COMMA && currToken.mType != E_TOKEN_TYPE::CLOSE_BRACKET)
+			{
+				_expect(E_TOKEN_TYPE::COMMA, currToken.mType);
+			}
+
+			processingTokens.push_back(currArgTokens);
+
 			if (currToken.mType == E_TOKEN_TYPE::CLOSE_BRACKET)
 			{
 				break;
 			}
-
-			_expect(E_TOKEN_TYPE::COMMA, currToken.mType);
 		}
 
 		if (processingTokens.size() != macroDesc.mArgsNames.size())
@@ -1109,10 +1126,19 @@ namespace tcpp
 		std::vector<TToken> replacementList{ macroDesc.mValue.cbegin(), macroDesc.mValue.cend() };
 		const auto& argsList = macroDesc.mArgsNames;
 
+		std::string replacementValue;
+
 		for (short currArgIndex = 0; currArgIndex < processingTokens.size(); ++currArgIndex)
 		{
 			const std::string& currArgName = argsList[currArgIndex];
-			auto&& currArgValueToken = processingTokens[currArgIndex];
+			auto&& currArgValueTokens = processingTokens[currArgIndex];
+
+			replacementValue.clear();
+
+			for (auto&& currArgToken : currArgValueTokens)
+			{
+				replacementValue.append(currArgToken.mRawView);
+			}
 
 			for (auto& currToken : replacementList)
 			{
@@ -1121,7 +1147,7 @@ namespace tcpp
 					continue;
 				}
 
-				currToken.mRawView = currArgValueToken.mRawView;
+				currToken.mRawView = replacementValue;
 			}
 		}
 
