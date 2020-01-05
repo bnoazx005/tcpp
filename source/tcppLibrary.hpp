@@ -88,7 +88,10 @@ namespace tcpp
 	class StringInputStream : public IInputStream
 	{
 		public:
-			StringInputStream(const std::string& source) TCPP_NOEXCEPT;
+			StringInputStream() TCPP_NOEXCEPT = delete;
+			explicit StringInputStream(const std::string& source) TCPP_NOEXCEPT;
+			StringInputStream(const StringInputStream& inputStream) TCPP_NOEXCEPT;
+			StringInputStream(StringInputStream&& inputStream) TCPP_NOEXCEPT;
 			virtual ~StringInputStream() TCPP_NOEXCEPT = default;
 
 			std::string ReadLine() TCPP_NOEXCEPT override;
@@ -174,7 +177,7 @@ namespace tcpp
 			using TStreamStack = std::stack<IInputStream*>;
 		public:
 			Lexer() TCPP_NOEXCEPT = delete;
-			Lexer(IInputStream& inputStream) TCPP_NOEXCEPT;
+			explicit Lexer(IInputStream& inputStream) TCPP_NOEXCEPT;
 			~Lexer() TCPP_NOEXCEPT = default;
 
 			TToken GetNextToken() TCPP_NOEXCEPT;
@@ -358,6 +361,16 @@ namespace tcpp
 
 	StringInputStream::StringInputStream(const std::string& source) TCPP_NOEXCEPT:
 		IInputStream(), mSourceStr(source)
+	{
+	}
+
+	StringInputStream::StringInputStream(const StringInputStream& inputStream) TCPP_NOEXCEPT:
+		mSourceStr(inputStream.mSourceStr)
+	{
+	}
+	
+	StringInputStream::StringInputStream(StringInputStream&& inputStream) TCPP_NOEXCEPT:
+		mSourceStr(std::move(inputStream.mSourceStr))
 	{
 	}
 
