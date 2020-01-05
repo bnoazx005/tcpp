@@ -162,6 +162,7 @@ namespace tcpp
 		std::string mRawView;
 
 		size_t mLineId;
+		size_t mPos;
 	} TToken, *TTokenPtr;
 
 
@@ -195,6 +196,7 @@ namespace tcpp
 			void PopStream() TCPP_NOEXCEPT;
 
 			size_t GetCurrLineIndex() const TCPP_NOEXCEPT;
+			size_t GetCurrPos() const TCPP_NOEXCEPT;
 		private:
 			TToken _scanTokens(std::string& inputLine) TCPP_NOEXCEPT;
 
@@ -217,6 +219,7 @@ namespace tcpp
 			std::string mCurrLine;
 
 			size_t mCurrLineIndex = 0;
+			size_t mCurrPos = 0;
 
 			TStreamStack mStreamsContext;
 			
@@ -287,7 +290,7 @@ namespace tcpp
 			using TOnIncludeCallback = std::function<IInputStream*(const std::string&, bool)>;
 			using TSymTable = std::vector<TMacroDesc>;
 			using TContextStack = std::list<std::string>;
-			using TDirectiveHandler = std::function<std::string(Preprocessor&, Lexer&)>;
+			using TDirectiveHandler = std::function<std::string(Preprocessor&, Lexer&, const std::string&)>;
 			using TDirectivesMap = std::unordered_map<std::string, TDirectiveHandler>;
 
 			typedef struct TIfStackEntry
@@ -493,6 +496,11 @@ namespace tcpp
 		return mCurrLineIndex;
 	}
 
+	size_t Lexer::GetCurrPos() const TCPP_NOEXCEPT
+	{
+		return mCurrPos;
+	}
+
 	TToken Lexer::_scanTokens(std::string& inputLine) TCPP_NOEXCEPT
 	{
 		char ch = '\0';
@@ -526,7 +534,8 @@ namespace tcpp
 				}
 
 				inputLine.erase(0, 1);
-				return { E_TOKEN_TYPE::NEWLINE, "\n", mCurrLineIndex };
+				++mCurrPos;
+				return { E_TOKEN_TYPE::NEWLINE, "\n", mCurrLineIndex, mCurrPos };
 			}
 
 			if (std::isspace(ch))
@@ -534,11 +543,12 @@ namespace tcpp
 				// flush current blob
 				if (!currStr.empty())
 				{
-					return { E_TOKEN_TYPE::BLOB, currStr, mCurrLineIndex };
+					return { E_TOKEN_TYPE::BLOB, currStr, mCurrLineIndex, mCurrPos };
 				}
 
 				inputLine.erase(0, 1);
-				return { E_TOKEN_TYPE::SPACE, " ", mCurrLineIndex };
+				++mCurrPos;
+				return { E_TOKEN_TYPE::SPACE, " ", mCurrLineIndex, mCurrPos };
 			}
 
 			if (ch == '#') // \note it could be # operator or a directive
@@ -546,7 +556,7 @@ namespace tcpp
 				// flush current blob
 				if (!currStr.empty())
 				{
-					return { E_TOKEN_TYPE::BLOB, currStr, mCurrLineIndex };
+					return { E_TOKEN_TYPE::BLOB, currStr, mCurrLineIndex, mCurrPos };
 				}
 
 				for (const auto& currDirective : mDirectivesTable)
@@ -556,7 +566,9 @@ namespace tcpp
 					if (inputLine.rfind(currDirectiveStr, 1) == 1)
 					{
 						inputLine.erase(0, currDirectiveStr.length() + 1);
-						return { std::get<E_TOKEN_TYPE>(currDirective), "", mCurrLineIndex };
+						mCurrPos += currDirectiveStr.length() + 1;
+
+						return { std::get<E_TOKEN_TYPE>(currDirective), "", mCurrLineIndex, mCurrPos };
 					}
 				}
 
@@ -566,7 +578,9 @@ namespace tcpp
 					if (inputLine.rfind(currDirectiveStr, 1) == 1)
 					{
 						inputLine.erase(0, currDirectiveStr.length() + 1);
-						return { E_TOKEN_TYPE::CUSTOM_DIRECTIVE, currDirectiveStr, mCurrLineIndex };
+						mCurrPos += currDirectiveStr.length() + 1;
+
+						return { E_TOKEN_TYPE::CUSTOM_DIRECTIVE, currDirectiveStr, mCurrLineIndex, mCurrPos };
 					}
 				}
 
@@ -580,14 +594,15 @@ namespace tcpp
 					{
 						case '#':	// \note concatenation operator
 							inputLine.erase(0, 1);
-							return { E_TOKEN_TYPE::CONCAT_OP, "", mCurrLineIndex };
+							++mCurrPos;
+							return { E_TOKEN_TYPE::CONCAT_OP, "", mCurrLineIndex, mCurrPos };
 						default:
 							if (nextCh != ' ') // \note stringification operator
 							{
-								return { E_TOKEN_TYPE::STRINGIZE_OP, "", mCurrLineIndex };
+								return { E_TOKEN_TYPE::STRINGIZE_OP, "", mCurrLineIndex, mCurrPos };
 							}
 
-							return { E_TOKEN_TYPE::BLOB, "#", mCurrLineIndex };
+							return { E_TOKEN_TYPE::BLOB, "#", mCurrLineIndex, mCurrPos };
 					}
 				}
 			}
@@ -597,7 +612,7 @@ namespace tcpp
 				// flush current blob
 				if (!currStr.empty())
 				{
-					return { E_TOKEN_TYPE::BLOB, currStr, mCurrLineIndex };
+					return { E_TOKEN_TYPE::BLOB, currStr, mCurrLineIndex, mCurrPos };
 				}
 
 				std::string number;
@@ -606,17 +621,21 @@ namespace tcpp
 				if (ch == '0' && !inputLine.empty())
 				{
 					inputLine.erase(0, 1);
+					++mCurrPos;
+
 					number.push_back(ch);
 
 					char nextCh = inputLine.front();
 					if (nextCh == 'x' || std::isdigit(nextCh))
 					{
 						inputLine.erase(0, 1);
+						++mCurrPos;
+
 						number.push_back(nextCh);
 					}
 					else
 					{
-						return { E_TOKEN_TYPE::NUMBER, number, mCurrLineIndex };
+						return { E_TOKEN_TYPE::NUMBER, number, mCurrLineIndex, mCurrPos };
 					}
 				}
 
@@ -626,8 +645,9 @@ namespace tcpp
 				} while ((i < inputLine.length()) && std::isdigit(ch = inputLine[++i]));
 
 				inputLine.erase(0, number.length());
+				mCurrPos += number.length();
 
-				return { E_TOKEN_TYPE::NUMBER, number, mCurrLineIndex };
+				return { E_TOKEN_TYPE::NUMBER, number, mCurrLineIndex, mCurrPos };
 			}
 
 			if (ch == '_' || std::isalpha(ch)) ///< \note parse identifier
@@ -644,12 +664,14 @@ namespace tcpp
 				{
 					identifier.push_back(ch);
 					inputLine.erase(0, 1);
+					++mCurrPos;
 				} while (!inputLine.empty() && (std::isalnum(ch = inputLine.front()) || (ch == '_')));
 
-				return { (keywordsMap.find(identifier) != keywordsMap.cend()) ? E_TOKEN_TYPE::KEYWORD : E_TOKEN_TYPE::IDENTIFIER, identifier, mCurrLineIndex };
+				return { (keywordsMap.find(identifier) != keywordsMap.cend()) ? E_TOKEN_TYPE::KEYWORD : E_TOKEN_TYPE::IDENTIFIER, identifier, mCurrLineIndex, mCurrPos };
 			}
 
 			inputLine.erase(0, 1);
+			++mCurrPos;
 
 			if ((separators.find_first_of(ch) != std::string::npos))
 			{
@@ -661,7 +683,7 @@ namespace tcpp
 						mTokensQueue.push_front(separatingToken);
 					}
 
-					return { E_TOKEN_TYPE::BLOB, currStr, mCurrLineIndex }; // flush current blob
+					return { E_TOKEN_TYPE::BLOB, currStr, mCurrLineIndex, mCurrPos }; // flush current blob
 				}
 
 				auto separatingToken = _scanSeparatorTokens(ch, inputLine);
@@ -677,7 +699,7 @@ namespace tcpp
 		// flush current blob
 		if (!currStr.empty())
 		{
-			return { E_TOKEN_TYPE::BLOB, currStr, mCurrLineIndex };
+			return { E_TOKEN_TYPE::BLOB, currStr, mCurrLineIndex, mCurrPos };
 		}
 
 		PopStream();
@@ -782,11 +804,11 @@ namespace tcpp
 		switch (ch)
 		{
 			case ',':
-				return { E_TOKEN_TYPE::COMMA, ",", mCurrLineIndex };
+				return { E_TOKEN_TYPE::COMMA, ",", mCurrLineIndex, mCurrPos };
 			case '(':
-				return { E_TOKEN_TYPE::OPEN_BRACKET, "(", mCurrLineIndex };
+				return { E_TOKEN_TYPE::OPEN_BRACKET, "(", mCurrLineIndex, mCurrPos };
 			case ')':
-				return { E_TOKEN_TYPE::CLOSE_BRACKET, ")", mCurrLineIndex };
+				return { E_TOKEN_TYPE::CLOSE_BRACKET, ")", mCurrLineIndex, mCurrPos };
 			case '<':
 				if (!inputLine.empty())
 				{
@@ -795,14 +817,16 @@ namespace tcpp
 					{
 						case '<':
 							inputLine.erase(0, 1);
-							return { E_TOKEN_TYPE::LSHIFT, "<<", mCurrLineIndex };
+							++mCurrPos;
+							return { E_TOKEN_TYPE::LSHIFT, "<<", mCurrLineIndex, mCurrPos };
 						case '=':
 							inputLine.erase(0, 1);
-							return { E_TOKEN_TYPE::LE, "<=", mCurrLineIndex };
+							++mCurrPos;
+							return { E_TOKEN_TYPE::LE, "<=", mCurrLineIndex, mCurrPos };
 					}					
 				}
 
-				return { E_TOKEN_TYPE::LESS, "<", mCurrLineIndex };
+				return { E_TOKEN_TYPE::LESS, "<", mCurrLineIndex, mCurrPos };
 			case '>':
 				if (!inputLine.empty())
 				{
@@ -811,56 +835,62 @@ namespace tcpp
 					{
 						case '>':
 							inputLine.erase(0, 1);
-							return { E_TOKEN_TYPE::RSHIFT, ">>", mCurrLineIndex };
+							++mCurrPos;
+							return { E_TOKEN_TYPE::RSHIFT, ">>", mCurrLineIndex, mCurrPos };
 						case '=':
 							inputLine.erase(0, 1);
-							return { E_TOKEN_TYPE::GE, ">=", mCurrLineIndex };
+							++mCurrPos;
+							return { E_TOKEN_TYPE::GE, ">=", mCurrLineIndex, mCurrPos };
 					}
 				}
 
-				return { E_TOKEN_TYPE::GREATER, ">", mCurrLineIndex };
+				return { E_TOKEN_TYPE::GREATER, ">", mCurrLineIndex, mCurrPos };
 			case '\"':
-				return { E_TOKEN_TYPE::QUOTES, "\"", mCurrLineIndex };
+				return { E_TOKEN_TYPE::QUOTES, "\"", mCurrLineIndex, mCurrPos };
 			case '+':
-				return { E_TOKEN_TYPE::PLUS, "+", mCurrLineIndex };
+				return { E_TOKEN_TYPE::PLUS, "+", mCurrLineIndex, mCurrPos };
 			case '-':
-				return { E_TOKEN_TYPE::MINUS, "-", mCurrLineIndex };
+				return { E_TOKEN_TYPE::MINUS, "-", mCurrLineIndex, mCurrPos };
 			case '*':
-				return { E_TOKEN_TYPE::STAR, "*", mCurrLineIndex };
+				return { E_TOKEN_TYPE::STAR, "*", mCurrLineIndex, mCurrPos };
 			case '/':
-				return { E_TOKEN_TYPE::SLASH, "/", mCurrLineIndex };
+				return { E_TOKEN_TYPE::SLASH, "/", mCurrLineIndex, mCurrPos };
 			case '&':
 				if (!inputLine.empty() && inputLine.front() == '&')
 				{
 					inputLine.erase(0, 1);
-					return { E_TOKEN_TYPE::AND, "&&", mCurrLineIndex };
+					++mCurrPos;
+					return { E_TOKEN_TYPE::AND, "&&", mCurrLineIndex, mCurrPos };
 				}
 
-				return { E_TOKEN_TYPE::AMPERSAND, "&", mCurrLineIndex };
+				return { E_TOKEN_TYPE::AMPERSAND, "&", mCurrLineIndex, mCurrPos };
 			case '|':
 				if (!inputLine.empty() && inputLine.front() == '|')
 				{
 					inputLine.erase(0, 1);
-					return { E_TOKEN_TYPE::OR, "||", mCurrLineIndex };
+					++mCurrPos;
+					return { E_TOKEN_TYPE::OR, "||", mCurrLineIndex, mCurrPos };
 				}
 
-				return { E_TOKEN_TYPE::VLINE, "|", mCurrLineIndex };
+				return { E_TOKEN_TYPE::VLINE, "|", mCurrLineIndex, mCurrPos };
 			case '!':
 				if (!inputLine.empty() && inputLine.front() == '=')
 				{
 					inputLine.erase(0, 1);
-					return { E_TOKEN_TYPE::NE, "!=", mCurrLineIndex };
+					++mCurrPos;
+					return { E_TOKEN_TYPE::NE, "!=", mCurrLineIndex, mCurrPos };
 				}
 
-				return { E_TOKEN_TYPE::NOT, "!", mCurrLineIndex };
+				return { E_TOKEN_TYPE::NOT, "!", mCurrLineIndex, mCurrPos };
 			case '=':
 				if (!inputLine.empty() && inputLine.front() == '=')
 				{
 					inputLine.erase(0, 1);
-					return { E_TOKEN_TYPE::EQ, "==", mCurrLineIndex };
+					++mCurrPos;
+					return { E_TOKEN_TYPE::EQ, "==", mCurrLineIndex, mCurrPos };
 				}
 
-				return { E_TOKEN_TYPE::BLOB, "=", mCurrLineIndex };
+				return { E_TOKEN_TYPE::BLOB, "=", mCurrLineIndex, mCurrPos };
 		}
 
 		return mEOFToken;
@@ -990,7 +1020,7 @@ namespace tcpp
 						auto customDirectiveIter = mCustomDirectivesHandlersMap.find(currToken.mRawView);
 						if (customDirectiveIter != mCustomDirectivesHandlersMap.cend())
 						{
-							appendString(customDirectiveIter->second(*this, *mpLexer));
+							appendString(customDirectiveIter->second(*this, *mpLexer, processedStr));
 						}
 						else
 						{
