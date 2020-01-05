@@ -144,6 +144,7 @@ namespace tcpp
 		LE,
 		EQ,
 		NE,
+		CUSTOM_DIRECTIVE,
 		UNKNOWN,
 	};
 
@@ -175,10 +176,14 @@ namespace tcpp
 		private:
 			using TTokensQueue = std::list<TToken>;
 			using TStreamStack = std::stack<IInputStream*>;
+			using TDirectivesMap = std::vector<std::tuple<std::string, E_TOKEN_TYPE>>;
+			using TDirectiveHandlersArray = std::unordered_set<std::string>;
 		public:
 			Lexer() TCPP_NOEXCEPT = delete;
 			explicit Lexer(IInputStream& inputStream) TCPP_NOEXCEPT;
 			~Lexer() TCPP_NOEXCEPT = default;
+
+			bool AddCustomDirective(const std::string& directive) TCPP_NOEXCEPT; 
 
 			TToken GetNextToken() TCPP_NOEXCEPT;
 
@@ -205,6 +210,8 @@ namespace tcpp
 		private:
 			static const TToken mEOFToken;
 
+			TDirectivesMap mDirectivesTable;
+
 			TTokensQueue mTokensQueue;
 
 			std::string mCurrLine;
@@ -212,6 +219,8 @@ namespace tcpp
 			size_t mCurrLineIndex = 0;
 
 			TStreamStack mStreamsContext;
+			
+			TDirectiveHandlersArray mCustomDirectivesMap;
 	};
 
 
@@ -243,6 +252,7 @@ namespace tcpp
 		UNEXPECTED_END_OF_INCLUDE_PATH,
 		ANOTHER_ELSE_BLOCK_FOUND,
 		ELIF_BLOCK_AFTER_ELSE_FOUND,
+		UNDEFINED_DIRECTIVE,
 	};
 
 
@@ -277,6 +287,8 @@ namespace tcpp
 			using TOnIncludeCallback = std::function<IInputStream*(const std::string&, bool)>;
 			using TSymTable = std::vector<TMacroDesc>;
 			using TContextStack = std::list<std::string>;
+			using TDirectiveHandler = std::function<std::string(Preprocessor&, Lexer&)>;
+			using TDirectivesMap = std::unordered_map<std::string, TDirectiveHandler>;
 
 			typedef struct TIfStackEntry
 			{
@@ -290,6 +302,8 @@ namespace tcpp
 			Preprocessor(const Preprocessor&) TCPP_NOEXCEPT = delete;
 			Preprocessor(Lexer& lexer, const TOnErrorCallback& onErrorCallback = {}, const TOnIncludeCallback& onIncludeCallback = {}) TCPP_NOEXCEPT;
 			~Preprocessor() TCPP_NOEXCEPT = default;
+
+			bool AddCustomDirectiveHandler(const std::string& directive, const TDirectiveHandler& handler) TCPP_NOEXCEPT;
 
 			std::string Process() TCPP_NOEXCEPT;
 
@@ -322,6 +336,7 @@ namespace tcpp
 			TSymTable mSymTable;
 			TContextStack mContextStack;
 			TIfStack mConditionalBlocksStack;
+			TDirectivesMap mCustomDirectivesHandlersMap;
 	};
 
 
@@ -353,6 +368,8 @@ namespace tcpp
 				return "#else directive should be last one";
 			case E_ERROR_TYPE::ELIF_BLOCK_AFTER_ELSE_FOUND:
 				return "#elif found after #else block";
+			case E_ERROR_TYPE::UNDEFINED_DIRECTIVE:
+				return "Undefined directive";
 		}
 
 		return "";
@@ -394,9 +411,32 @@ namespace tcpp
 	const TToken Lexer::mEOFToken = { E_TOKEN_TYPE::END };
 
 	Lexer::Lexer(IInputStream& inputStream) TCPP_NOEXCEPT:
-	mCurrLine(), mCurrLineIndex(0)
+	mCurrLine(), mCurrLineIndex(0), mDirectivesTable
+	{
+		{ "define", E_TOKEN_TYPE::DEFINE },
+		{ "ifdef", E_TOKEN_TYPE::IFDEF },
+		{ "ifndef", E_TOKEN_TYPE::IFNDEF },
+		{ "if", E_TOKEN_TYPE::IF },
+		{ "else", E_TOKEN_TYPE::ELSE },
+		{ "elif", E_TOKEN_TYPE::ELIF },
+		{ "undef", E_TOKEN_TYPE::UNDEF },
+		{ "endif", E_TOKEN_TYPE::ENDIF },
+		{ "include", E_TOKEN_TYPE::INCLUDE },
+		{ "defined", E_TOKEN_TYPE::DEFINED },
+	}
 	{
 		PushStream(inputStream);
+	}
+
+	bool Lexer::AddCustomDirective(const std::string& directive) TCPP_NOEXCEPT
+	{
+		if (mCustomDirectivesMap.find(directive) != mCustomDirectivesMap.cend())
+		{
+			return false;
+		}
+
+		mCustomDirectivesMap.insert(directive);
+		return true;
 	}
 
 	TToken Lexer::GetNextToken() TCPP_NOEXCEPT
@@ -457,20 +497,6 @@ namespace tcpp
 	{
 		char ch = '\0';
 
-		static const std::vector<std::tuple<std::string, E_TOKEN_TYPE>> directives
-		{
-			{ "define", E_TOKEN_TYPE::DEFINE },
-			{ "ifdef", E_TOKEN_TYPE::IFDEF },
-			{ "ifndef", E_TOKEN_TYPE::IFNDEF },
-			{ "if", E_TOKEN_TYPE::IF },
-			{ "else", E_TOKEN_TYPE::ELSE },
-			{ "elif", E_TOKEN_TYPE::ELIF },
-			{ "undef", E_TOKEN_TYPE::UNDEF },
-			{ "endif", E_TOKEN_TYPE::ENDIF },
-			{ "include", E_TOKEN_TYPE::INCLUDE },
-			{ "defined", E_TOKEN_TYPE::DEFINED },
-		};
-
 		static const std::unordered_set<std::string> keywordsMap
 		{
 			"auto", "double", "int", "struct",
@@ -523,7 +549,7 @@ namespace tcpp
 					return { E_TOKEN_TYPE::BLOB, currStr, mCurrLineIndex };
 				}
 
-				for (const auto& currDirective : directives)
+				for (const auto& currDirective : mDirectivesTable)
 				{
 					auto&& currDirectiveStr = std::get<std::string>(currDirective);
 
@@ -531,6 +557,16 @@ namespace tcpp
 					{
 						inputLine.erase(0, currDirectiveStr.length() + 1);
 						return { std::get<E_TOKEN_TYPE>(currDirective), "", mCurrLineIndex };
+					}
+				}
+
+				// \note custom directives
+				for (const auto& currDirectiveStr : mCustomDirectivesMap)
+				{
+					if (inputLine.rfind(currDirectiveStr, 1) == 1)
+					{
+						inputLine.erase(0, currDirectiveStr.length() + 1);
+						return { E_TOKEN_TYPE::CUSTOM_DIRECTIVE, currDirectiveStr, mCurrLineIndex };
 					}
 				}
 
@@ -842,6 +878,19 @@ namespace tcpp
 		mSymTable.push_back({ "__LINE__" });
 	}
 
+	bool Preprocessor::AddCustomDirectiveHandler(const std::string& directive, const TDirectiveHandler& handler) TCPP_NOEXCEPT
+	{
+		if ((mCustomDirectivesHandlersMap.find(directive) != mCustomDirectivesHandlersMap.cend()) ||
+			!mpLexer->AddCustomDirective(directive))
+		{
+			return false;
+		}
+
+		mCustomDirectivesHandlersMap.insert({ directive, handler });
+
+		return true;
+	}
+
 	std::string Preprocessor::Process() TCPP_NOEXCEPT
 	{
 		TCPP_ASSERT(mpLexer);
@@ -935,6 +984,19 @@ namespace tcpp
 					break;
 				case E_TOKEN_TYPE::STRINGIZE_OP:
 					appendString((currToken = mpLexer->GetNextToken()).mRawView);
+					break;
+				case E_TOKEN_TYPE::CUSTOM_DIRECTIVE:
+					{
+						auto customDirectiveIter = mCustomDirectivesHandlersMap.find(currToken.mRawView);
+						if (customDirectiveIter != mCustomDirectivesHandlersMap.cend())
+						{
+							appendString(customDirectiveIter->second(*this, *mpLexer));
+						}
+						else
+						{
+							mOnErrorCallback({ E_ERROR_TYPE::UNDEFINED_DIRECTIVE, mpLexer->GetCurrLineIndex() });
+						}
+					}
 					break;
 				default:
 					appendString(currToken.mRawView);
