@@ -411,7 +411,8 @@ namespace tcpp
 
 	bool Lexer::HasNextToken() const TCPP_NOEXCEPT
 	{
-		return _getActiveStream()->HasNextLine() || !mCurrLine.empty() || !mTokensQueue.empty();
+		IInputStream* pCurrInputStream = _getActiveStream();
+		return (pCurrInputStream ? pCurrInputStream->HasNextLine() : false) || !mCurrLine.empty() || !mTokensQueue.empty();
 	}
 
 	void Lexer::AppendFront(const std::vector<TToken>& tokens) TCPP_NOEXCEPT
@@ -426,6 +427,11 @@ namespace tcpp
 
 	void Lexer::PopStream() TCPP_NOEXCEPT
 	{
+		if (mStreamsContext.empty())
+		{
+			return;
+		}
+
 		mStreamsContext.pop();
 	}
 
@@ -713,8 +719,8 @@ namespace tcpp
 			bool isPrevChWhitespace = false;
 			sourceLine.erase(std::remove_if(sourceLine.begin(), sourceLine.end(), [&isPrevChWhitespace](char ch)
 			{
-				bool shouldReplace = std::isspace(ch) && isPrevChWhitespace;
-				isPrevChWhitespace = std::isspace(ch);
+				bool shouldReplace = (ch == ' ' || ch == '\t') && isPrevChWhitespace;
+				isPrevChWhitespace = (ch == ' ' || ch == '\t');
 				return shouldReplace;
 			}), sourceLine.end());
 		}
@@ -813,7 +819,7 @@ namespace tcpp
 
 	IInputStream* Lexer::_getActiveStream() const TCPP_NOEXCEPT
 	{
-		return mStreamsContext.top();
+		return mStreamsContext.empty() ? nullptr : mStreamsContext.top();
 	}
 
 
@@ -921,6 +927,11 @@ namespace tcpp
 					appendString(currToken.mRawView);
 					break;
 			}
+
+			if (!mpLexer->HasNextToken())
+			{
+				mpLexer->PopStream();
+			}
 		}
 
 		return processedStr;
@@ -950,6 +961,11 @@ namespace tcpp
 			while ((currToken = lexer.GetNextToken()).mType != E_TOKEN_TYPE::NEWLINE)
 			{
 				desc.mValue.push_back(currToken);
+			}
+
+			if (desc.mValue.empty())
+			{
+				desc.mValue.push_back({ E_TOKEN_TYPE::NUMBER, "1", mpLexer->GetCurrLineIndex() });
 			}
 
 			_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);

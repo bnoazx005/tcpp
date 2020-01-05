@@ -210,10 +210,32 @@ TEST_CASE("Preprocessor Tests")
 		REQUIRE(preprocessor.Process() == "one\n");
 	}
 
+	SECTION("TestProcess_PassSourceWithIncludeDirective_ReturnsProcessedSource")
+	{
+		StringInputStream input("#include <system>\ntwo");
+		StringInputStream systemInput("one\n");
+		Lexer lexer(input);
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		}, [&systemInput](auto&&, auto&&)
+		{
+			return &systemInput;
+		});
+
+		REQUIRE((result && (preprocessor.Process() == "one\ntwo")));
+	}
+
 	SECTION("TestProcess_PassSourceWithIncludeGuards_ReturnsProcessedSource")
 	{
 		std::string inputSource = R"(
 			#define FOO
+			
+			#include <system>
 
 			#ifndef FILE_H
 			#define FILE_H
@@ -229,7 +251,13 @@ TEST_CASE("Preprocessor Tests")
 			#endif
 		)";
 
+		std::string systemSource = R"(
+			#define FOO3			
+			int x = 42;
+		)";
+
 		StringInputStream input(inputSource);
+		StringInputStream systemInput(systemSource);
 		Lexer lexer(input);
 
 		bool result = true;
@@ -238,6 +266,9 @@ TEST_CASE("Preprocessor Tests")
 		{
 			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
 			result = false;
+		}, [&systemInput](auto&&, auto&&)
+		{
+			return &systemInput;
 		});
 
 		preprocessor.Process();
