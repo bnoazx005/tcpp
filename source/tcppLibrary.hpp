@@ -1319,7 +1319,7 @@ namespace tcpp
 
 		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
 		
-		return { static_cast<bool>(!_evaluateExpression(expressionTokens)) };
+		return TIfStackEntry { static_cast<bool>(!_evaluateExpression(expressionTokens)) };
 	}
 
 
@@ -1336,7 +1336,7 @@ namespace tcpp
 		currToken = mpLexer->GetNextToken();
 		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
 
-		return { std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&macroIdentifier](auto&& item)
+		return TIfStackEntry { std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&macroIdentifier](auto&& item)
 								{
 									return item.mName == macroIdentifier;
 								}) == mSymTable.cend() };
@@ -1355,7 +1355,7 @@ namespace tcpp
 		currToken = mpLexer->GetNextToken();
 		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
 
-		return { std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&macroIdentifier](auto&& item)
+		return TIfStackEntry { std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&macroIdentifier](auto&& item)
 								{
 									return item.mName == macroIdentifier;
 								}) != mSymTable.cend() };
