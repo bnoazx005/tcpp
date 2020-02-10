@@ -297,6 +297,8 @@ namespace tcpp
 			{
 				bool mShouldBeSkipped = true;
 				bool mHasElseBeenFound = false;
+
+				TIfStackEntry(bool shouldBeSkipped) : mShouldBeSkipped(shouldBeSkipped), mHasElseBeenFound(false) {}
 			} TIfStackEntry, *TIfStackEntryPtr;
 
 			using TIfStack = std::stack<TIfStackEntry>;
