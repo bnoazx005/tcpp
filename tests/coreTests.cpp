@@ -292,4 +292,23 @@ TEST_CASE("Preprocessor Tests")
 		std::cout << preprocessor.Process() << std::endl;
 		REQUIRE(result);
 	}
+
+	SECTION("TestProcess_PassFloatingPointValue_ReturnsThisValue")
+	{
+		std::string inputSource = "1.0001 1.00001f vec4(1.0f, 0.2, 0.223, 1.0001f);";
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		});
+
+		auto&& output = preprocessor.Process();
+		std::cout << output << std::endl;
+		REQUIRE(output == inputSource);
+	}
 }

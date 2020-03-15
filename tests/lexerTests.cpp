@@ -299,4 +299,24 @@ TEST_CASE("Lexer Tests")
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
+
+	SECTION("TestGetNextToken_PassStreamWithFloatingPointNumbers_ReturnsCorrectTokensSequence")
+	{
+		MockInputStream input({ "1.0001 1.00001f" });
+		Lexer lexer(input);
+
+		// \note For now we don't actually recognize floating-point numbers just process them as blobs
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NUMBER);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::BLOB);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NUMBER);
+
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
+
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NUMBER);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::BLOB);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NUMBER);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER); 
+
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
+	}
 }
