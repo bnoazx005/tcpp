@@ -1,5 +1,8 @@
 # TCPP (Tiny C PreProcessor)
 
+[![Build Status](https://travis-ci.org/bnoazx005/tcpp.svg?branch=master)](https://travis-ci.org/bnoazx005/tcpp)
+[![Build status](https://ci.appveyor.com/api/projects/status/jjnqcd4x08wtx38r/branch/master?svg=true)](https://ci.appveyor.com/project/bnoazx005/tcpp/branch/master)
+
 TCPP is small single-header library which provides implementation of C preprocessor. Most part of the library is based upon official specifications of the preprocessor https://docs.freebsd.org/info/cpp/cpp.pdf, https://gcc.gnu.org/onlinedocs/cpp/. 
 
 This project was started with the only one need which was to implement preprocessor for GLSL and HLSL languages and use it within custom game engine. That's it. So I've implemented the simplest working tool as I guess. And I really hope that this library will help for someone who shares my ideas and beliefs. I've not chosen Boost.Wave library because of its dependencies. Yeah, Boost looks so modular until you try to integrate the only module into some project. So, that's why this library is designed in single-header way.
