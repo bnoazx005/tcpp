@@ -311,4 +311,42 @@ TEST_CASE("Preprocessor Tests")
 		std::cout << output << std::endl;
 		REQUIRE(output == inputSource);
 	}
+
+	SECTION("TestProcess_PassTwoStringsWithConcatOperation_ReturnsSingleString")
+	{
+		std::string inputSource = "AAA   ## BB";
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		});
+
+		std::string str = preprocessor.Process();
+		std::cout << str << std::endl;
+
+		REQUIRE((result && (str == "AAABB")));
+	}
+
+	SECTION("TestProcess_PassSourceWithFunctionMacro_ReturnsProcessedSource")
+	{
+		std::string inputSource = "#define FOO(X) \\\nint X; \\\nint X ## _Additional;\nFOO(Test)";
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		});
+
+		std::cout << preprocessor.Process() << std::endl;
+		REQUIRE(result);
+	}
 }

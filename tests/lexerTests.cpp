@@ -319,4 +319,18 @@ TEST_CASE("Lexer Tests")
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
+
+	SECTION("TestGetNextToken_PassTwoStringsWithConcapOp_ReturnsCorrectTokensSequence")
+	{
+		MockInputStream input({ "AAA   ## BB" });
+		Lexer lexer(input);
+
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::CONCAT_OP);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
+
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
+	}
 }

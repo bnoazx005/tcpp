@@ -1014,8 +1014,14 @@ namespace tcpp
 					}), mContextStack.end());
 					break;
 				case E_TOKEN_TYPE::CONCAT_OP:
-					// this feature doesn't work for now
-					appendString((currToken = mpLexer->GetNextToken()).mRawView);
+					if (processedStr.back() == ' ') // \note Remove last character in the processed source if it was a whitespace
+					{
+						processedStr.erase(processedStr.length() - 1);
+					}
+
+					while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
+
+					appendString(currToken.mRawView);
 					break;
 				case E_TOKEN_TYPE::STRINGIZE_OP:
 					appendString((currToken = mpLexer->GetNextToken()).mRawView);
@@ -1109,8 +1115,7 @@ namespace tcpp
 						_expect(E_TOKEN_TYPE::COMMA, currToken.mType);
 					}
 
-					currToken = mpLexer->GetNextToken();
-					_expect(E_TOKEN_TYPE::SPACE, currToken.mType);
+					while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
 
 					// \note parse macro's value
 					extractValue(macroDesc, *mpLexer);
