@@ -1074,6 +1074,10 @@ namespace tcpp
 		{
 			TToken currToken;
 
+			while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
+
+			desc.mValue.push_back(currToken);
+
 			while ((currToken = lexer.GetNextToken()).mType != E_TOKEN_TYPE::NEWLINE)
 			{
 				desc.mValue.push_back(currToken);
@@ -1114,9 +1118,7 @@ namespace tcpp
 
 						_expect(E_TOKEN_TYPE::COMMA, currToken.mType);
 					}
-
-					while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
-
+					
 					// \note parse macro's value
 					extractValue(macroDesc, *mpLexer);
 				}

@@ -335,6 +335,8 @@ TEST_CASE("Preprocessor Tests")
 	SECTION("TestProcess_PassSourceWithFunctionMacro_ReturnsProcessedSource")
 	{
 		std::string inputSource = "#define FOO(X) \\\nint X; \\\nint X ## _Additional;\nFOO(Test)";
+		std::string expectedResult = "int Test;int Test_Additional;";
+
 		StringInputStream input(inputSource);
 		Lexer lexer(input);
 
@@ -346,7 +348,6 @@ TEST_CASE("Preprocessor Tests")
 			result = false;
 		});
 
-		std::cout << preprocessor.Process() << std::endl;
-		REQUIRE(result);
+		REQUIRE((result && (preprocessor.Process() == expectedResult)));
 	}
 }
