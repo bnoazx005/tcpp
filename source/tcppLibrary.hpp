@@ -416,19 +416,19 @@ namespace tcpp
 	const TToken Lexer::mEOFToken = { E_TOKEN_TYPE::END };
 
 	Lexer::Lexer(IInputStream& inputStream) TCPP_NOEXCEPT:
-	mCurrLine(), mCurrLineIndex(0), mDirectivesTable
-	{
-		{ "define", E_TOKEN_TYPE::DEFINE },
-		{ "ifdef", E_TOKEN_TYPE::IFDEF },
-		{ "ifndef", E_TOKEN_TYPE::IFNDEF },
-		{ "if", E_TOKEN_TYPE::IF },
-		{ "else", E_TOKEN_TYPE::ELSE },
-		{ "elif", E_TOKEN_TYPE::ELIF },
-		{ "undef", E_TOKEN_TYPE::UNDEF },
-		{ "endif", E_TOKEN_TYPE::ENDIF },
-		{ "include", E_TOKEN_TYPE::INCLUDE },
-		{ "defined", E_TOKEN_TYPE::DEFINED },
-	}
+		mDirectivesTable
+		{
+			{ "define", E_TOKEN_TYPE::DEFINE },
+			{ "ifdef", E_TOKEN_TYPE::IFDEF },
+			{ "ifndef", E_TOKEN_TYPE::IFNDEF },
+			{ "if", E_TOKEN_TYPE::IF },
+			{ "else", E_TOKEN_TYPE::ELSE },
+			{ "elif", E_TOKEN_TYPE::ELIF },
+			{ "undef", E_TOKEN_TYPE::UNDEF },
+			{ "endif", E_TOKEN_TYPE::ENDIF },
+			{ "include", E_TOKEN_TYPE::INCLUDE },
+			{ "defined", E_TOKEN_TYPE::DEFINED },
+		}, mCurrLine(), mCurrLineIndex(0)
 	{
 		PushStream(inputStream);
 	}
@@ -1410,13 +1410,11 @@ namespace tcpp
 
 	int Preprocessor::_evaluateExpression(const std::vector<TToken>& exprTokens) const TCPP_NOEXCEPT
 	{
-		size_t pos = 0;
-
 		std::vector<TToken> tokens{ exprTokens.begin(), exprTokens.end() };
 		tokens.push_back({ E_TOKEN_TYPE::END });
 
 		// \note use recursive descent parsing technique to evaluate expression
-		auto evalCall = [this, &tokens]()
+		auto evalCall = []()
 		{
 			return 0;
 		};
@@ -1446,12 +1444,14 @@ namespace tcpp
 				case E_TOKEN_TYPE::NUMBER:
 					tokens.erase(tokens.cbegin());
 					return std::stoi(currToken.mRawView);
+				default:
+					break;
 			}
 			
 			return 0;
 		};
 
-		auto evalUnary = [this, &tokens, &evalPrimary]()
+		auto evalUnary = [&tokens, &evalPrimary]()
 		{
 			int result = evalPrimary();
 
@@ -1464,12 +1464,14 @@ namespace tcpp
 				case E_TOKEN_TYPE::NOT:
 					result = !result;
 					break;
+				default:
+					break;
 			}
 
 			return result;
 		};
 
-		auto evalMultiplication = [this, &tokens, &evalUnary]()
+		auto evalMultiplication = [&tokens, &evalUnary]()
 		{
 			int result = evalUnary();
 
@@ -1484,13 +1486,15 @@ namespace tcpp
 					case E_TOKEN_TYPE::SLASH:
 						result = result / evalUnary();
 						break;
+					default:
+						break;
 				}
 			}
 
 			return result;
 		};
 
-		auto evalAddition = [this, &tokens, &evalMultiplication]()
+		auto evalAddition = [&tokens, &evalMultiplication]()
 		{
 			int result = evalMultiplication();
 
@@ -1505,13 +1509,15 @@ namespace tcpp
 					case E_TOKEN_TYPE::MINUS:
 						result = result - evalMultiplication();
 						break;
+					default:
+						break;
 				}
 			}
 
 			return result;
 		};
 
-		auto evalComparison = [this, &tokens, &evalAddition]()
+		auto evalComparison = [&tokens, &evalAddition]()
 		{
 			int result = evalAddition();
 
@@ -1535,13 +1541,15 @@ namespace tcpp
 					case E_TOKEN_TYPE::GE:
 						result = result >= evalAddition();
 						break;
+					default:
+						break;
 				}
 			}
 
 			return result;
 		};
 
-		auto evalEquality = [this, &tokens, &evalComparison]()
+		auto evalEquality = [&tokens, &evalComparison]()
 		{
 			int result = evalComparison();
 
@@ -1556,13 +1564,15 @@ namespace tcpp
 					case E_TOKEN_TYPE::NE:
 						result = result != evalComparison();
 						break;
+					default:
+						break;
 				}
 			}
 
 			return result;
 		};
 
-		auto evalAndExpr = [this, &tokens, &evalEquality]()
+		auto evalAndExpr = [&tokens, &evalEquality]()
 		{
 			int result = evalEquality();
 
@@ -1574,7 +1584,7 @@ namespace tcpp
 			return result;
 		};
 
-		auto evalOrExpr = [this, &tokens, &evalAndExpr]()
+		auto evalOrExpr = [&tokens, &evalAndExpr]()
 		{
 			int result = evalAndExpr();
 			
