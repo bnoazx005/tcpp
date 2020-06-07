@@ -312,6 +312,25 @@ TEST_CASE("Preprocessor Tests")
 		REQUIRE(output == inputSource);
 	}
 
+	SECTION("TestProcess_PassFloatingPointValue_ReturnsThisValue2")
+	{
+		std::string inputSource = "float c = nebula(layer2_coord * 3.0) * 0.35 - 0.05";
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		});
+
+		auto&& output = preprocessor.Process();
+		std::cout << output << std::endl;
+		REQUIRE(output == inputSource);
+	}
+
 	SECTION("TestProcess_PassTwoStringsWithConcatOperation_ReturnsSingleString")
 	{
 		std::string inputSource = "AAA   ## BB";

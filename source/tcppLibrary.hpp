@@ -643,11 +643,11 @@ namespace tcpp
 
 				uint8_t charsToRemove = 0;
 
-				do
+				while ((i < inputLine.length()) && std::isdigit(ch = inputLine[i++]))
 				{
 					number.push_back(ch);
 					++charsToRemove;
-				} while ((i < inputLine.length()) && std::isdigit(ch = inputLine[++i]));
+				}
 
 				inputLine.erase(0, charsToRemove);
 				mCurrPos += charsToRemove;
