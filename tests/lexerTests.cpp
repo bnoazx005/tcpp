@@ -144,7 +144,7 @@ TEST_CASE("Lexer Tests")
 		MockInputStream input(std::move(keywords));
 		Lexer lexer(input);
 
-		for (int i = 0; i < keywordsCount; ++i)
+		for (size_t i = 0; i < keywordsCount; ++i)
 		{
 			REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::KEYWORD);
 		}
