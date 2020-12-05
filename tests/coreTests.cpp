@@ -350,4 +350,26 @@ TEST_CASE("Preprocessor Tests")
 
 		REQUIRE((result && (preprocessor.Process() == expectedResult)));
 	}
+
+	SECTION("TestProcess_PassNestedFunctionMacroIntoAnotherFunctionMacro_ReturnsProcessedSource")
+	{
+		std::string inputSource = "#define FOO(X, Y) X(Y)\nFOO(Foo, Test(0, 0))";
+		std::string expectedResult = "Foo(Test(0, 0))";
+
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		});
+
+		std::string actualResult = preprocessor.Process();
+		std::cout << actualResult << std::endl;
+
+		REQUIRE((result && (actualResult == expectedResult)));
+	}
 }

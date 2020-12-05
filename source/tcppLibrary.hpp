@@ -1232,7 +1232,7 @@ namespace tcpp
 
 		std::string replacementValue;
 
-		for (short currArgIndex = 0; currArgIndex < processingTokens.size(); ++currArgIndex)
+		for (size_t currArgIndex = 0; currArgIndex < processingTokens.size(); ++currArgIndex)
 		{
 			const std::string& currArgName = argsList[currArgIndex];
 			auto&& currArgValueTokens = processingTokens[currArgIndex];
