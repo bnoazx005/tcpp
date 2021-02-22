@@ -1190,6 +1190,8 @@ namespace tcpp
 		std::vector<std::vector<TToken>> processingTokens;
 		std::vector<TToken> currArgTokens;
 
+		uint8_t currNestingLevel = 0;
+
 		// \note read all arguments values
 		while (true)
 		{
@@ -1200,10 +1202,20 @@ namespace tcpp
 
 			while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE);
 			
-			while (currToken.mType != E_TOKEN_TYPE::COMMA &&
+			while ((currToken.mType != E_TOKEN_TYPE::COMMA &&
 				   currToken.mType != E_TOKEN_TYPE::NEWLINE &&
-				   currToken.mType != E_TOKEN_TYPE::CLOSE_BRACKET)
+				   currToken.mType != E_TOKEN_TYPE::CLOSE_BRACKET) || currNestingLevel)
 			{
+				switch (currToken.mType)
+				{
+					case E_TOKEN_TYPE::OPEN_BRACKET:
+						++currNestingLevel;
+						break;
+					case E_TOKEN_TYPE::CLOSE_BRACKET:
+						--currNestingLevel;
+						break;
+				}
+
 				currArgTokens.push_back({ currToken });
 				currToken = mpLexer->GetNextToken();
 			}
