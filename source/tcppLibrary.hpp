@@ -548,9 +548,12 @@ namespace tcpp
 					return { E_TOKEN_TYPE::BLOB, currStr, mCurrLineIndex, mCurrPos };
 				}
 
+				std::string separatorStr;
+				separatorStr.push_back(inputLine.front());
+
 				inputLine.erase(0, 1);
 				++mCurrPos;
-				return { E_TOKEN_TYPE::SPACE, " ", mCurrLineIndex, mCurrPos };
+				return { E_TOKEN_TYPE::SPACE, std::move(separatorStr), mCurrLineIndex, mCurrPos };
 			}
 
 			if (ch == '#') // \note it could be # operator or a directive
@@ -763,6 +766,30 @@ namespace tcpp
 		return input;
 	}
 
+
+	static bool IsEscapeSequenceAtPos(const std::string& str, std::string::size_type pos)
+	{
+		if (pos + 1 >= str.length() || pos >= str.length() || str[pos] != '\\')
+		{
+			return false;
+		}
+
+		static constexpr char escapeSymbols[] { '\'', '\\', 'n', '\"', 'a', 'b', 'f', 'r', 't', 'v' };
+
+		char testedSymbol = str[pos + 1];
+
+		for (char ch : escapeSymbols)
+		{
+			if (ch == testedSymbol)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+
 	std::string Lexer::_requestSourceLine() TCPP_NOEXCEPT
 	{
 		IInputStream* pCurrInputStream = _getActiveStream();
@@ -777,7 +804,7 @@ namespace tcpp
 
 		/// \note join lines that were splitted with backslash sign
 		std::string::size_type pos = 0;
-		while (((pos = sourceLine.find_first_of('\\')) != std::string::npos))
+		while (((pos = sourceLine.find_first_of('\\')) != std::string::npos) && !IsEscapeSequenceAtPos(sourceLine, pos))
 		{
 			if (pCurrInputStream->HasNextLine())
 			{
@@ -789,7 +816,7 @@ namespace tcpp
 
 			sourceLine.erase(sourceLine.begin() + pos, sourceLine.end());
 		}
-
+#
 		// remove redundant whitespaces
 		{
 			bool isPrevChWhitespace = false;

@@ -391,4 +391,33 @@ TEST_CASE("Preprocessor Tests")
 
 		REQUIRE((result && (actualResult == expectedResult)));
 	}
+
+	SECTION("TestProcess_PassEscapeSequenceInsideLiteralString_CorrectlyPreprocessIt")
+	{
+		std::string inputSource = R"(
+void main() {
+	printf("test \n"); 
+})";
+
+		std::string expectedResult = R"(
+void main() {
+	printf("test \n"); 
+})";
+		
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		});
+
+		std::string actualResult = preprocessor.Process();
+		std::cout << actualResult << std::endl;
+
+		REQUIRE((result && (actualResult == expectedResult)));
+	}
 }
