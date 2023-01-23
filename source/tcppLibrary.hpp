@@ -1103,11 +1103,14 @@ namespace tcpp
 
 			while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
 
-			desc.mValue.push_back(currToken);
-
-			while ((currToken = lexer.GetNextToken()).mType != E_TOKEN_TYPE::NEWLINE)
+			if (currToken.mType != E_TOKEN_TYPE::NEWLINE)
 			{
 				desc.mValue.push_back(currToken);
+
+				while ((currToken = lexer.GetNextToken()).mType != E_TOKEN_TYPE::NEWLINE)
+				{
+					desc.mValue.push_back(currToken);
+				}
 			}
 
 			if (desc.mValue.empty())
