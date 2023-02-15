@@ -981,7 +981,11 @@ namespace tcpp
 					break;
 				case E_TOKEN_TYPE::UNDEF:
 					currToken = mpLexer->GetNextToken();
+					_expect(E_TOKEN_TYPE::SPACE, currToken.mType);
+
+					currToken = mpLexer->GetNextToken();
 					_expect(E_TOKEN_TYPE::IDENTIFIER, currToken.mType);
+
 					_removeMacroDefinition(currToken.mRawView);
 					break;
 				case E_TOKEN_TYPE::IF:
