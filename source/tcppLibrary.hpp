@@ -297,8 +297,9 @@ namespace tcpp
 			{
 				bool mShouldBeSkipped = true;
 				bool mHasElseBeenFound = false;
+				bool mHasIfBlockBeenEntered = false;
 
-				TIfStackEntry(bool shouldBeSkipped) : mShouldBeSkipped(shouldBeSkipped), mHasElseBeenFound(false) {}
+				TIfStackEntry(bool shouldBeSkipped) : mShouldBeSkipped(shouldBeSkipped), mHasElseBeenFound(false), mHasIfBlockBeenEntered(!shouldBeSkipped) {}
 			} TIfStackEntry, *TIfStackEntryPtr;
 
 			using TIfStack = std::stack<TIfStackEntry>;
@@ -1317,6 +1318,11 @@ namespace tcpp
 
 	void Preprocessor::_processInclusion() TCPP_NOEXCEPT
 	{
+		if (_shouldTokenBeSkipped())
+		{
+			return;
+		}
+
 		TToken currToken;
 
 		while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
@@ -1377,7 +1383,8 @@ namespace tcpp
 
 		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
 		
-		return TIfStackEntry { static_cast<bool>(!_evaluateExpression(expressionTokens)) };
+		bool skip = static_cast<bool>(!_evaluateExpression(expressionTokens));
+		return TIfStackEntry(skip);
 	}
 
 
@@ -1394,10 +1401,11 @@ namespace tcpp
 		currToken = mpLexer->GetNextToken();
 		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
 
-		return TIfStackEntry { std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&macroIdentifier](auto&& item)
-								{
-									return item.mName == macroIdentifier;
-								}) == mSymTable.cend() };
+		bool skip = std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&macroIdentifier](auto&& item)
+			{
+				return item.mName == macroIdentifier;
+			}) == mSymTable.cend();
+		return TIfStackEntry(skip);
 	}
 
 	Preprocessor::TIfStackEntry Preprocessor::_processIfndefConditional() TCPP_NOEXCEPT
@@ -1413,10 +1421,11 @@ namespace tcpp
 		currToken = mpLexer->GetNextToken();
 		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
 
-		return TIfStackEntry { std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&macroIdentifier](auto&& item)
-								{
-									return item.mName == macroIdentifier;
-								}) != mSymTable.cend() };
+		bool skip = std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&macroIdentifier](auto&& item)
+			{
+				return item.mName == macroIdentifier;
+			}) != mSymTable.cend();
+		return TIfStackEntry(skip);
 	}
 
 	void Preprocessor::_processElseConditional(TIfStackEntry& currStackEntry) TCPP_NOEXCEPT
@@ -1427,7 +1436,7 @@ namespace tcpp
 			return;
 		}
 
-		currStackEntry.mShouldBeSkipped  = !currStackEntry.mShouldBeSkipped;
+		currStackEntry.mShouldBeSkipped  = currStackEntry.mHasIfBlockBeenEntered || !currStackEntry.mShouldBeSkipped;
 		currStackEntry.mHasElseBeenFound = true;
 	}
 
@@ -1451,7 +1460,8 @@ namespace tcpp
 
 		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
 
-		currStackEntry.mShouldBeSkipped = static_cast<bool>(!_evaluateExpression(expressionTokens));
+		currStackEntry.mShouldBeSkipped = currStackEntry.mHasIfBlockBeenEntered || static_cast<bool>(!_evaluateExpression(expressionTokens));
+		if (!currStackEntry.mShouldBeSkipped) currStackEntry.mHasIfBlockBeenEntered = true;
 	}
 
 	int Preprocessor::_evaluateExpression(const std::vector<TToken>& exprTokens) const TCPP_NOEXCEPT
@@ -1474,17 +1484,41 @@ namespace tcpp
 				case E_TOKEN_TYPE::IDENTIFIER:
 					{
 						// \note macro call
-						if (tokens.size() >= 2 && tokens[1].mType == E_TOKEN_TYPE::OPEN_BRACKET)
+						TToken identifierToken;
+						if (currToken.mRawView == "defined")
 						{
-							return evalCall();
-						}
+							// defined ( X )
+							do {
+								tokens.erase(tokens.cbegin());
+							} while (tokens.front().mType == E_TOKEN_TYPE::SPACE);
 
-						tokens.erase(tokens.cbegin());
+							_expect(E_TOKEN_TYPE::OPEN_BRACKET, tokens.front().mType);
+
+							do {
+								tokens.erase(tokens.cbegin());
+							} while (tokens.front().mType == E_TOKEN_TYPE::SPACE);
+
+							_expect(E_TOKEN_TYPE::IDENTIFIER, tokens.front().mType);
+
+							identifierToken = tokens.front();
+
+							do {
+								tokens.erase(tokens.cbegin());
+							} while (tokens.front().mType == E_TOKEN_TYPE::SPACE);
+
+							_expect(E_TOKEN_TYPE::CLOSE_BRACKET, tokens.front().mType);
+						}
+						else 
+						{
+							tokens.erase(tokens.cbegin());
+							identifierToken = currToken;
+						}
+						
 
 						// \note simple identifier
-						return static_cast<int>(std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&currToken](auto&& item)
+						return static_cast<int>(std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&identifierToken](auto&& item)
 						{
-							return item.mName == currToken.mRawView;
+							return item.mName == identifierToken.mRawView;
 						}) != mSymTable.cend());
 					}
 				case E_TOKEN_TYPE::NUMBER:
@@ -1499,22 +1533,27 @@ namespace tcpp
 
 		auto evalUnary = [&tokens, &evalPrimary]()
 		{
-			int result = evalPrimary();
-
-			auto currToken = tokens.front();
-			switch (currToken.mType)
+			bool resultApply = false;
+			TToken currToken;
+			while ((currToken = tokens.front()).mType == E_TOKEN_TYPE::NOT || currToken.mType == E_TOKEN_TYPE::MINUS)
 			{
+				switch (currToken.mType)
+				{
 				case E_TOKEN_TYPE::MINUS:
-					result = -result;
+					// TODO fix this
 					break;
 				case E_TOKEN_TYPE::NOT:
-					result = !result;
+					tokens.erase(tokens.cbegin());
+					resultApply = !resultApply;
 					break;
 				default:
 					break;
+				}
 			}
 
-			return result;
+			// even number of NOTs: false ^ false = false, false ^ true = true
+			// odd number of NOTs: true ^ false = true (!false), true ^ true = false (!true)
+			return resultApply ^ evalPrimary();
 		};
 
 		auto evalMultiplication = [&tokens, &evalUnary]()
@@ -1527,9 +1566,11 @@ namespace tcpp
 				switch (currToken.mType)
 				{
 					case E_TOKEN_TYPE::STAR:
+						tokens.erase(tokens.cbegin());
 						result = result * evalUnary();
 						break;
 					case E_TOKEN_TYPE::SLASH:
+						tokens.erase(tokens.cbegin());
 						result = result / evalUnary();
 						break;
 					default:
@@ -1550,9 +1591,11 @@ namespace tcpp
 				switch (currToken.mType)
 				{
 					case E_TOKEN_TYPE::PLUS:
+						tokens.erase(tokens.cbegin());
 						result = result + evalMultiplication();
 						break;
 					case E_TOKEN_TYPE::MINUS:
+						tokens.erase(tokens.cbegin());
 						result = result - evalMultiplication();
 						break;
 					default:
@@ -1576,15 +1619,19 @@ namespace tcpp
 				switch (currToken.mType)
 				{
 					case E_TOKEN_TYPE::LESS:
+						tokens.erase(tokens.cbegin());
 						result = result < evalAddition();
 						break;
 					case E_TOKEN_TYPE::GREATER:
+						tokens.erase(tokens.cbegin());
 						result = result > evalAddition();
 						break;
 					case E_TOKEN_TYPE::LE:
+						tokens.erase(tokens.cbegin());
 						result = result <= evalAddition();
 						break;
 					case E_TOKEN_TYPE::GE:
+						tokens.erase(tokens.cbegin());
 						result = result >= evalAddition();
 						break;
 					default:
@@ -1605,9 +1652,11 @@ namespace tcpp
 				switch (currToken.mType)
 				{
 					case E_TOKEN_TYPE::EQ:
+						tokens.erase(tokens.cbegin());
 						result = result == evalComparison();
 						break;
 					case E_TOKEN_TYPE::NE:
+						tokens.erase(tokens.cbegin());
 						result = result != evalComparison();
 						break;
 					default:
@@ -1624,6 +1673,7 @@ namespace tcpp
 
 			while (tokens.front().mType == E_TOKEN_TYPE::AND)
 			{
+				tokens.erase(tokens.cbegin());
 				result = result && evalEquality();
 			}
 
@@ -1636,6 +1686,7 @@ namespace tcpp
 			
 			while (tokens.front().mType == E_TOKEN_TYPE::OR)
 			{
+				tokens.erase(tokens.cbegin());
 				result = result || evalAndExpr();
 			}
 
