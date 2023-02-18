@@ -508,7 +508,7 @@ namespace tcpp
 	}
 
 
-	static char PeekNextChar(std::string& str, size_t step = 1)
+	static char PeekNextChar(const std::string& str, size_t step = 1)
 	{
 		return (step < str.length()) ? str[step] : static_cast<char>(EOF);
 	}
@@ -828,7 +828,6 @@ namespace tcpp
 		return false;
 	}
 
-
 	std::string Lexer::_requestSourceLine() TCPP_NOEXCEPT
 	{
 		IInputStream* pCurrInputStream = _getActiveStream();
@@ -843,7 +842,8 @@ namespace tcpp
 
 		/// \note join lines that were splitted with backslash sign
 		std::string::size_type pos = 0;
-		while (((pos = sourceLine.find_first_of('\\')) != std::string::npos) && !IsEscapeSequenceAtPos(sourceLine, pos))
+		while (((pos = sourceLine.find_first_of('\\')) != std::string::npos) 
+			&& (std::isspace(PeekNextChar(sourceLine, pos + 1)) || PeekNextChar(sourceLine, pos + 1) == EOF) && !IsEscapeSequenceAtPos(sourceLine, pos))
 		{
 			if (pCurrInputStream->HasNextLine())
 			{
@@ -854,17 +854,6 @@ namespace tcpp
 			}
 
 			sourceLine.erase(sourceLine.begin() + pos, sourceLine.end());
-		}
-#
-		// remove redundant whitespaces
-		{
-			bool isPrevChWhitespace = false;
-			sourceLine.erase(std::remove_if(sourceLine.begin(), sourceLine.end(), [&isPrevChWhitespace](char ch)
-			{
-				bool shouldReplace = (ch == ' ' || ch == '\t') && isPrevChWhitespace;
-				isPrevChWhitespace = (ch == ' ' || ch == '\t');
-				return shouldReplace;
-			}), sourceLine.end());
 		}
 
 		return sourceLine;
@@ -1084,7 +1073,7 @@ namespace tcpp
 					}), mContextStack.end());
 					break;
 				case E_TOKEN_TYPE::CONCAT_OP:
-					if (processedStr.back() == ' ') // \note Remove last character in the processed source if it was a whitespace
+					while (processedStr.back() == ' ') // \note Remove last character in the processed source if it was a whitespace
 					{
 						processedStr.erase(processedStr.length() - 1);
 					}
