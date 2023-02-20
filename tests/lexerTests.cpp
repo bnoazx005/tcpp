@@ -48,13 +48,16 @@ TEST_CASE("Lexer Tests")
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
 
-	SECTION("TestGetNextToken_PassStreamWithWhitespacesLines_ReturnsSPACEandENDTokens")
+	SECTION("TestGetNextToken_PassStreamWithWhitespacesLines_ReturnsAllSPACEandENDTokens")
 	{
 		MockInputStream input({ "    ", "  \t " });
 		Lexer lexer(input);
 
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
+		for (size_t i = 0; i < 8; i++)
+		{
+			REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
+		}
+
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
 
@@ -156,6 +159,7 @@ TEST_CASE("Lexer Tests")
 		MockInputStream input({ "/*test\n"," this thing skip */ " });
 		Lexer lexer(input);
 
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::COMMENTARY);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
@@ -165,6 +169,7 @@ TEST_CASE("Lexer Tests")
 		MockInputStream input({ "/*test\n"," /*\n", " */ /*test*/ this thing skip */ " });
 		Lexer lexer(input);
 
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::COMMENTARY);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
@@ -172,13 +177,15 @@ TEST_CASE("Lexer Tests")
 	SECTION("TestGetNextToken_PassStreamWithNestedMultilineComments_ReturnsSPACEAndENDTokens")
 	{
 		// \note without comments the string looks like that "id  id2 "
-		MockInputStream input({ "id /*test\n","/*\n", "*/ id2", "/*test this thing skip */ " });
+		MockInputStream input({ "id /*test\n","\n", "*/ id2", "/*test this thing skip */ " });
 		Lexer lexer(input);
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::COMMENTARY);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::COMMENTARY);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
@@ -326,7 +333,12 @@ TEST_CASE("Lexer Tests")
 		Lexer lexer(input);
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
+
+		for (short i = 0; i < 3; ++i)
+		{
+			REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
+		}
+
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::CONCAT_OP);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);

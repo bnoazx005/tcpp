@@ -42,6 +42,7 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <cctype>
+#include <sstream>
 
 
 ///< Library's configs
@@ -145,6 +146,7 @@ namespace tcpp
 		EQ,
 		NE,
 		CUSTOM_DIRECTIVE,
+		COMMENTARY,
 		UNKNOWN,
 	};
 
@@ -199,10 +201,6 @@ namespace tcpp
 			size_t GetCurrPos() const TCPP_NOEXCEPT;
 		private:
 			TToken _scanTokens(std::string& inputLine) TCPP_NOEXCEPT;
-
-			std::string _removeSingleLineComment(const std::string& line) const TCPP_NOEXCEPT;
-
-			std::string _removeMultiLineComments(const std::string& currInput) TCPP_NOEXCEPT;
 
 			std::string _requestSourceLine() TCPP_NOEXCEPT;
 
@@ -464,7 +462,6 @@ namespace tcpp
 			}
 		}
 
-		mCurrLine = _removeMultiLineComments(mCurrLine);
 		return _scanTokens(mCurrLine);
 	}
 
@@ -504,6 +501,78 @@ namespace tcpp
 		return mCurrPos;
 	}
 
+
+	static std::tuple<size_t, char> EatNextChar(std::string& str, size_t pos, size_t count = 1)
+	{
+		str.erase(0, count);
+		return { pos + count, str.empty() ? static_cast<char>(EOF) : str.front() };
+	}
+
+
+	static char PeekNextChar(const std::string& str, size_t step = 1)
+	{
+		return (step < str.length()) ? str[step] : static_cast<char>(EOF);
+	}
+
+
+	static std::string ExtractSingleLineComment(const std::string& currInput) TCPP_NOEXCEPT
+	{
+		std::stringstream ss(currInput);
+		std::string commentStr;
+
+		std::getline(ss, commentStr, '\n');
+		return commentStr;
+	}
+
+
+	static std::string ExtractMultiLineComments(std::string& currInput, const std::function<std::string()>& requestNextLineFunctor) TCPP_NOEXCEPT
+	{
+		std::string input = currInput;
+		std::string commentStr;
+
+		// \note here below all states of DFA are placed
+		std::function<std::string(std::string&)> enterCommentBlock = [&enterCommentBlock, &commentStr, requestNextLineFunctor](std::string& input)
+		{
+			commentStr.append(input.substr(0, 2));
+			input.erase(0, 2); // \note remove /*
+
+			while (input.rfind("*/", 0) != 0 && !input.empty())
+			{
+				commentStr.push_back(input.front());
+				input.erase(0, 1);
+
+				if (input.rfind("/*", 0) == 0)
+				{
+					input = enterCommentBlock(input);
+				}
+
+				if (input.empty() && requestNextLineFunctor)
+				{
+					input = requestNextLineFunctor();
+				}
+			}
+
+			commentStr.append(input.substr(0, 2));
+			input.erase(0, 2); // \note remove */
+
+			return input;
+		};
+
+		std::string::size_type pos = input.find("/*");
+		if (pos != std::string::npos)
+		{
+			std::string restStr = input.substr(pos, std::string::npos);
+			enterCommentBlock(restStr);
+
+			currInput = commentStr + restStr;
+			
+			return commentStr;
+		}
+
+		return commentStr;
+	}
+
+
 	TToken Lexer::_scanTokens(std::string& inputLine) TCPP_NOEXCEPT
 	{
 		char ch = '\0';
@@ -528,6 +597,26 @@ namespace tcpp
 		{
 			ch = inputLine.front();
 
+			if (ch == '/')
+			{
+				std::string commentStr;
+
+				if (PeekNextChar(inputLine, 1) == '/') // \note Found a single line C++ style comment
+				{
+					commentStr = ExtractSingleLineComment(inputLine);
+				}
+				else if (PeekNextChar(inputLine, 1) == '*') /// \note multi-line commentary
+				{
+					commentStr = ExtractMultiLineComments(inputLine, std::bind(&Lexer::_requestSourceLine, this));
+				}
+
+				if (!commentStr.empty())
+				{
+					mCurrPos = std::get<size_t>(EatNextChar(inputLine, mCurrPos, commentStr.length()));
+					return { E_TOKEN_TYPE::COMMENTARY, commentStr, mCurrLineIndex, mCurrPos };
+				}
+			}
+
 			if (ch == '\n')
 			{
 				// flush current blob
@@ -536,8 +625,7 @@ namespace tcpp
 					return { E_TOKEN_TYPE::BLOB, currStr, mCurrLineIndex };
 				}
 
-				inputLine.erase(0, 1);
-				++mCurrPos;
+				mCurrPos = std::get<size_t>(EatNextChar(inputLine, mCurrPos));
 				return { E_TOKEN_TYPE::NEWLINE, "\n", mCurrLineIndex, mCurrPos };
 			}
 
@@ -552,8 +640,7 @@ namespace tcpp
 				std::string separatorStr;
 				separatorStr.push_back(inputLine.front());
 
-				inputLine.erase(0, 1);
-				++mCurrPos;
+				mCurrPos = std::get<size_t>(EatNextChar(inputLine, mCurrPos));
 				return { E_TOKEN_TYPE::SPACE, std::move(separatorStr), mCurrLineIndex, mCurrPos };
 			}
 
@@ -626,8 +713,7 @@ namespace tcpp
 
 				if (ch == '0' && !inputLine.empty())
 				{
-					inputLine.erase(0, 1);
-					++mCurrPos;
+					mCurrPos = std::get<size_t>(EatNextChar(inputLine, mCurrPos));
 
 					number.push_back(ch);
 
@@ -672,15 +758,13 @@ namespace tcpp
 				do
 				{
 					identifier.push_back(ch);
-					inputLine.erase(0, 1);
-					++mCurrPos;
+					mCurrPos = std::get<size_t>(EatNextChar(inputLine, mCurrPos));
 				} while (!inputLine.empty() && (std::isalnum(ch = inputLine.front()) || (ch == '_')));
 
 				return { (keywordsMap.find(identifier) != keywordsMap.cend()) ? E_TOKEN_TYPE::KEYWORD : E_TOKEN_TYPE::IDENTIFIER, identifier, mCurrLineIndex, mCurrPos };
 			}
 
-			inputLine.erase(0, 1);
-			++mCurrPos;
+			mCurrPos = std::get<size_t>(EatNextChar(inputLine, mCurrPos));
 
 			if ((separators.find_first_of(ch) != std::string::npos))
 			{
@@ -722,51 +806,6 @@ namespace tcpp
 		return mEOFToken;
 	}
 
-	std::string Lexer::_removeSingleLineComment(const std::string& line) const TCPP_NOEXCEPT
-	{
-		std::string::size_type pos = line.find("//");
-		return (pos == std::string::npos) ? line : line.substr(0, pos);
-	}
-
-	std::string Lexer::_removeMultiLineComments(const std::string& currInput) TCPP_NOEXCEPT
-	{
-		std::string input = currInput;
-
-		// \note here below all states of DFA are placed
-		std::function<std::string(std::string&)> enterCommentBlock = [&enterCommentBlock, this](std::string& input)
-		{
-			input.erase(0, 2); // \note remove /*
-
-			while (input.rfind("*/", 0) != 0 && !input.empty())
-			{
-				input.erase(0, 1);
-
-				if (input.rfind("/*", 0) == 0)
-				{
-					input = enterCommentBlock(input);
-				}
-
-				if (input.empty())
-				{
-					input = _requestSourceLine();
-				}
-			}
-
-			input.erase(0, 2); // \note remove */
-
-			return input;
-		};
-
-		std::string::size_type pos = input.find("/*");
-		if (pos != std::string::npos)
-		{
-			std::string restStr = input.substr(pos, std::string::npos);
-			return input.substr(0, pos) + enterCommentBlock(restStr);
-		}
-
-		return input;
-	}
-
 
 	static bool IsEscapeSequenceAtPos(const std::string& str, std::string::size_type pos)
 	{
@@ -790,7 +829,6 @@ namespace tcpp
 		return false;
 	}
 
-
 	std::string Lexer::_requestSourceLine() TCPP_NOEXCEPT
 	{
 		IInputStream* pCurrInputStream = _getActiveStream();
@@ -800,33 +838,23 @@ namespace tcpp
 			return "";
 		}
 
-		std::string sourceLine = _removeSingleLineComment(pCurrInputStream->ReadLine());
+		std::string sourceLine = pCurrInputStream->ReadLine();
 		++mCurrLineIndex;
 
 		/// \note join lines that were splitted with backslash sign
 		std::string::size_type pos = 0;
-		while (((pos = sourceLine.find_first_of('\\')) != std::string::npos) && !IsEscapeSequenceAtPos(sourceLine, pos))
+		while (((pos = sourceLine.find_first_of('\\')) != std::string::npos) 
+			&& (std::isspace(PeekNextChar(sourceLine, pos + 1)) || PeekNextChar(sourceLine, pos + 1) == EOF) && !IsEscapeSequenceAtPos(sourceLine, pos))
 		{
 			if (pCurrInputStream->HasNextLine())
 			{
-				sourceLine.replace(pos ? (pos - 1) : 0, std::string::npos, _removeSingleLineComment(pCurrInputStream->ReadLine()));
+				sourceLine.replace(pos ? (pos - 1) : 0, std::string::npos, pCurrInputStream->ReadLine());
 				++mCurrLineIndex;
 
 				continue;
 			}
 
 			sourceLine.erase(sourceLine.begin() + pos, sourceLine.end());
-		}
-#
-		// remove redundant whitespaces
-		{
-			bool isPrevChWhitespace = false;
-			sourceLine.erase(std::remove_if(sourceLine.begin(), sourceLine.end(), [&isPrevChWhitespace](char ch)
-			{
-				bool shouldReplace = (ch == ' ' || ch == '\t') && isPrevChWhitespace;
-				isPrevChWhitespace = (ch == ' ' || ch == '\t');
-				return shouldReplace;
-			}), sourceLine.end());
 		}
 
 		return sourceLine;
@@ -1046,7 +1074,7 @@ namespace tcpp
 					}), mContextStack.end());
 					break;
 				case E_TOKEN_TYPE::CONCAT_OP:
-					if (processedStr.back() == ' ') // \note Remove last character in the processed source if it was a whitespace
+					while (processedStr.back() == ' ') // \note Remove last character in the processed source if it was a whitespace
 					{
 						processedStr.erase(processedStr.length() - 1);
 					}

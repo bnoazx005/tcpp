@@ -395,14 +395,14 @@ TEST_CASE("Preprocessor Tests")
 	SECTION("TestProcess_PassEscapeSequenceInsideLiteralString_CorrectlyPreprocessIt")
 	{
 		std::string inputSource = R"(
-void main() {
-	printf("test \n"); 
-})";
+		void main() {
+			printf("test \n"); 
+		})";
 
 		std::string expectedResult = R"(
-void main() {
-	printf("test \n"); 
-})";
+		void main() {
+			printf("test \n"); 
+		})";
 		
 		StringInputStream input(inputSource);
 		Lexer lexer(input);
@@ -420,4 +420,41 @@ void main() {
 
 		REQUIRE((result && (actualResult == expectedResult)));
 	}
+
+	SECTION("TestProcess_PassTextWithEscapeSequenceWithinCommentary_CommentsAreBypassedWithoutAnyChanges")
+	{
+		std::string inputSource = R"(
+		Line above
+
+		// "\p"
+		Line below
+		float getNumber() {
+			return 1.0;
+		})";
+
+		std::string expectedResult = R"(
+		Line above
+
+		// "\p"
+		Line below
+		float getNumber() {
+			return 1.0;
+		})";
+
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		});
+
+		std::string actualResult = preprocessor.Process();
+		REQUIRE((result && (actualResult == expectedResult)));
+	}
+
+
 }
