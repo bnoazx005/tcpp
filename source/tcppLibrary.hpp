@@ -1553,7 +1553,7 @@ namespace tcpp
 
 			// even number of NOTs: false ^ false = false, false ^ true = true
 			// odd number of NOTs: true ^ false = true (!false), true ^ true = false (!true)
-			return resultApply ^ evalPrimary();
+			return static_cast<int>(resultApply) ^ evalPrimary();
 		};
 
 		auto evalMultiplication = [&tokens, &evalUnary]()
