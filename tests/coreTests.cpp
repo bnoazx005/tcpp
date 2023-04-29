@@ -456,5 +456,32 @@ TEST_CASE("Preprocessor Tests")
 		REQUIRE((result && (actualResult == expectedResult)));
 	}
 
+	SECTION("TestProcess_PassDefineThatSeparatedWithSpaces_ReturnsCorrectProcessedSource")
+	{
+		std::string inputSource = "#   define Foo";
+		
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
 
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		});
+
+		std::string str = preprocessor.Process();
+
+		/// \note symbol table should contain Foo macro
+		const auto& symTable = preprocessor.GetSymbolsTable();
+		
+		auto it = std::find_if(symTable.cbegin(), symTable.cend(), [](auto&& symTableEntry)
+		{
+			return symTableEntry.mName == "Foo";
+		});
+
+		REQUIRE(it != symTable.cend());
+		REQUIRE((result && str.empty()));
+	}
 }

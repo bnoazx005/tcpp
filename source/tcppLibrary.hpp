@@ -652,14 +652,21 @@ namespace tcpp
 					return { E_TOKEN_TYPE::BLOB, currStr, mCurrLineIndex, mCurrPos };
 				}
 
+				/// \note Skip whitespaces if there're exist
+				do
+				{
+					mCurrPos = std::get<size_t>(EatNextChar(inputLine, mCurrPos));
+				} 
+				while (std::isspace(PeekNextChar(inputLine, 0)));
+
 				for (const auto& currDirective : mDirectivesTable)
 				{
 					auto&& currDirectiveStr = std::get<std::string>(currDirective);
 
-					if (inputLine.rfind(currDirectiveStr, 1) == 1)
+					if (inputLine.rfind(currDirectiveStr, 0) == 0)
 					{
-						inputLine.erase(0, currDirectiveStr.length() + 1);
-						mCurrPos += currDirectiveStr.length() + 1;
+						inputLine.erase(0, currDirectiveStr.length());
+						mCurrPos += currDirectiveStr.length();
 
 						return { std::get<E_TOKEN_TYPE>(currDirective), "", mCurrLineIndex, mCurrPos };
 					}
@@ -668,16 +675,14 @@ namespace tcpp
 				// \note custom directives
 				for (const auto& currDirectiveStr : mCustomDirectivesMap)
 				{
-					if (inputLine.rfind(currDirectiveStr, 1) == 1)
+					if (inputLine.rfind(currDirectiveStr, 0) == 0)
 					{
-						inputLine.erase(0, currDirectiveStr.length() + 1);
-						mCurrPos += currDirectiveStr.length() + 1;
+						inputLine.erase(0, currDirectiveStr.length());
+						mCurrPos += currDirectiveStr.length();
 
 						return { E_TOKEN_TYPE::CUSTOM_DIRECTIVE, currDirectiveStr, mCurrLineIndex, mCurrPos };
 					}
 				}
-
-				inputLine.erase(0, 1);
 
 				// \note if we've reached this line it's # operator not directive
 				if (!inputLine.empty())
@@ -1161,6 +1166,7 @@ namespace tcpp
 				extractValue(macroDesc, *mpLexer);
 				break;
 			case E_TOKEN_TYPE::NEWLINE:
+			case E_TOKEN_TYPE::END:
 				macroDesc.mValue.push_back({ E_TOKEN_TYPE::NUMBER, "1", mpLexer->GetCurrLineIndex() });
 				break;
 			case E_TOKEN_TYPE::OPEN_BRACKET: // function line macro
