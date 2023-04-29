@@ -145,6 +145,7 @@ namespace tcpp
 		LE,
 		EQ,
 		NE,
+		SEMICOLON,
 		CUSTOM_DIRECTIVE,
 		COMMENTARY,
 		UNKNOWN,
@@ -589,7 +590,7 @@ namespace tcpp
 			"do", "if", "static", "while"
 		};
 
-		static const std::string separators = ",()<>\"+-*/&|!=";
+		static const std::string separators = ",()<>\"+-*/&|!=;";
 
 		std::string currStr = "";
 
@@ -957,6 +958,9 @@ namespace tcpp
 				}
 
 				return { E_TOKEN_TYPE::BLOB, "=", mCurrLineIndex, mCurrPos };
+
+			case ';':
+				return { E_TOKEN_TYPE::SEMICOLON, ";", mCurrLineIndex, mCurrPos };
 		}
 
 		return mEOFToken;

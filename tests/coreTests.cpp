@@ -484,4 +484,25 @@ TEST_CASE("Preprocessor Tests")
 		REQUIRE(it != symTable.cend());
 		REQUIRE((result && str.empty()));
 	}
+
+	SECTION("TestProcess_PassCodeWithCommentary_ReturnsCorrectProcessedSource")
+	{
+		std::string inputSource = "A;// Commentary";
+		std::string expectedResult = "A;// Commentary";
+
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		});
+
+		std::string str = preprocessor.Process();
+
+		REQUIRE((result && str == expectedResult));
+	}
 }

@@ -344,4 +344,15 @@ TEST_CASE("Lexer Tests")
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
+
+	SECTION("TestGetNextToken_PassSomeCodeThatEndsWithCommentary_ReturnsCorrectTokensSequence")
+	{
+		MockInputStream input({ "A;// comment" });
+		Lexer lexer(input);
+
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SEMICOLON);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::COMMENTARY);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
+	}
 }
