@@ -319,7 +319,7 @@ namespace tcpp
 			void _createMacroDefinition() TCPP_NOEXCEPT;
 			void _removeMacroDefinition(const std::string& macroName) TCPP_NOEXCEPT;
 
-			std::vector<TToken> _expandMacroDefinition(const TMacroDesc& macroDesc, const TToken& idToken) TCPP_NOEXCEPT;
+			std::vector<TToken> _expandMacroDefinition(const TMacroDesc& macroDesc, const TToken& idToken, const std::function<TToken()>& getNextTokenCallback) const TCPP_NOEXCEPT;
 
 			void _expect(const E_TOKEN_TYPE& expectedType, const E_TOKEN_TYPE& actualType) const TCPP_NOEXCEPT;
 
@@ -339,7 +339,7 @@ namespace tcpp
 			TOnErrorCallback mOnErrorCallback;
 			TOnIncludeCallback mOnIncludeCallback;
 			TSymTable mSymTable;
-			TContextStack mContextStack;
+			mutable TContextStack mContextStack;
 			TIfStack mConditionalBlocksStack;
 			TDirectivesMap mCustomDirectivesHandlersMap;
 	};
@@ -1068,7 +1068,7 @@ namespace tcpp
 
 						if (iter != mSymTable.cend() && contextIter == mContextStack.cend())
 						{
-							mpLexer->AppendFront(_expandMacroDefinition(*iter, currToken));
+							mpLexer->AppendFront(_expandMacroDefinition(*iter, currToken, [this] { return mpLexer->GetNextToken(); }));
 						}
 						else
 						{
@@ -1235,7 +1235,7 @@ namespace tcpp
 		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
 	}
 
-	std::vector<TToken> Preprocessor::_expandMacroDefinition(const TMacroDesc& macroDesc, const TToken& idToken) TCPP_NOEXCEPT
+	std::vector<TToken> Preprocessor::_expandMacroDefinition(const TMacroDesc& macroDesc, const TToken& idToken, const std::function<TToken()>& getNextTokenCallback) const TCPP_NOEXCEPT
 	{
 		// \note expand object like macro with simple replacement
 		if (macroDesc.mArgsNames.empty())
@@ -1257,7 +1257,9 @@ namespace tcpp
 		mContextStack.push_back(macroDesc.mName);
 
 		// \note function like macro's case
-		auto currToken = mpLexer->GetNextToken();
+		auto currToken = getNextTokenCallback();
+
+		while (currToken.mType == E_TOKEN_TYPE::SPACE) { currToken = getNextTokenCallback(); } // \note skip space tokens
 		_expect(E_TOKEN_TYPE::OPEN_BRACKET, currToken.mType);
 
 		std::vector<std::vector<TToken>> processingTokens;
@@ -1270,10 +1272,10 @@ namespace tcpp
 		{
 			currArgTokens.clear();
 
-			while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
+			while ((currToken = getNextTokenCallback()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
 			currArgTokens.push_back({ currToken });
 
-			while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE);
+			while ((currToken = getNextTokenCallback()).mType == E_TOKEN_TYPE::SPACE);
 			
 			while ((currToken.mType != E_TOKEN_TYPE::COMMA &&
 				   currToken.mType != E_TOKEN_TYPE::NEWLINE &&
@@ -1290,7 +1292,7 @@ namespace tcpp
 				}
 
 				currArgTokens.push_back({ currToken });
-				currToken = mpLexer->GetNextToken();
+				currToken = getNextTokenCallback();
 			}
 
 			if (currToken.mType != E_TOKEN_TYPE::COMMA && currToken.mType != E_TOKEN_TYPE::CLOSE_BRACKET)
@@ -1416,6 +1418,11 @@ namespace tcpp
 
 		while ((currToken = mpLexer->GetNextToken()).mType != E_TOKEN_TYPE::NEWLINE)
 		{
+			if (E_TOKEN_TYPE::SPACE == currToken.mType) 
+			{ 
+				continue; 
+			}
+
 			expressionTokens.push_back(currToken);
 		}
 
@@ -1507,14 +1514,13 @@ namespace tcpp
 		std::vector<TToken> tokens{ exprTokens.begin(), exprTokens.end() };
 		tokens.push_back({ E_TOKEN_TYPE::END });
 
-		// \note use recursive descent parsing technique to evaluate expression
-		auto evalCall = []()
+		auto evalPrimary = [this, &tokens]()
 		{
-			return 0;
-		};
+			while (E_TOKEN_TYPE::SPACE == tokens.front().mType) /// \note Skip whitespaces
+			{
+				tokens.erase(tokens.cbegin());
+			}
 
-		auto evalPrimary = [this, &tokens, &evalCall]()
-		{
 			auto currToken = tokens.front();
 
 			switch (currToken.mType)
@@ -1545,6 +1551,12 @@ namespace tcpp
 							} while (tokens.front().mType == E_TOKEN_TYPE::SPACE);
 
 							_expect(E_TOKEN_TYPE::CLOSE_BRACKET, tokens.front().mType);
+
+							// \note simple identifier
+							return static_cast<int>(std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&identifierToken](auto&& item)
+							{
+								return item.mName == identifierToken.mRawView;
+							}) != mSymTable.cend());
 						}
 						else 
 						{
@@ -1552,16 +1564,40 @@ namespace tcpp
 							identifierToken = currToken;
 						}
 						
-
-						// \note simple identifier
-						return static_cast<int>(std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&identifierToken](auto&& item)
+						/// \note Try to expand macro's value
+						auto it = std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&identifierToken](auto&& item)
 						{
 							return item.mName == identifierToken.mRawView;
-						}) != mSymTable.cend());
+						});
+
+						if (it == mSymTable.cend())
+						{
+							/// \note Lexer for now doesn't support numbers recognition so numbers are recognized as identifiers too
+							return atoi(identifierToken.mRawView.c_str());
+						}
+						else
+						{
+							if (it->mArgsNames.empty())
+							{
+								return _evaluateExpression(it->mValue); /// simple macro replacement
+							}
+
+							/// \note Macro function call so we should firstly expand that one
+							auto currTokenIt = tokens.cbegin();
+							return _evaluateExpression(_expandMacroDefinition(*it, identifierToken, [&currTokenIt] { return *currTokenIt++; }));
+						}
+
+						return 0; /// \note Something went wrong so return 0
 					}
+
 				case E_TOKEN_TYPE::NUMBER:
 					tokens.erase(tokens.cbegin());
 					return std::stoi(currToken.mRawView);
+
+				case E_TOKEN_TYPE::OPEN_BRACKET:
+					tokens.erase(tokens.cbegin());
+					return _evaluateExpression(tokens);
+
 				default:
 					break;
 			}
@@ -1571,6 +1607,11 @@ namespace tcpp
 
 		auto evalUnary = [&tokens, &evalPrimary]()
 		{
+			while (E_TOKEN_TYPE::SPACE == tokens.front().mType) /// \note Skip whitespaces
+			{
+				tokens.erase(tokens.cbegin());
+			}
+
 			bool resultApply = false;
 			TToken currToken;
 			while ((currToken = tokens.front()).mType == E_TOKEN_TYPE::NOT || currToken.mType == E_TOKEN_TYPE::MINUS)
@@ -1597,6 +1638,7 @@ namespace tcpp
 		auto evalMultiplication = [&tokens, &evalUnary]()
 		{
 			int result = evalUnary();
+			int secondOperand = 0;
 
 			TToken currToken;
 			while ((currToken = tokens.front()).mType == E_TOKEN_TYPE::STAR || currToken.mType == E_TOKEN_TYPE::SLASH)
@@ -1609,7 +1651,9 @@ namespace tcpp
 						break;
 					case E_TOKEN_TYPE::SLASH:
 						tokens.erase(tokens.cbegin());
-						result = result / evalUnary();
+						
+						secondOperand = evalUnary();
+						result = secondOperand ? (result / secondOperand) : 0 /* division by zero is considered as false in the implementation */;
 						break;
 					default:
 						break;
@@ -1708,6 +1752,11 @@ namespace tcpp
 		auto evalAndExpr = [&tokens, &evalEquality]()
 		{
 			int result = evalEquality();
+
+			while (E_TOKEN_TYPE::SPACE == tokens.front().mType)
+			{ 
+				tokens.erase(tokens.cbegin());
+			}
 
 			while (tokens.front().mType == E_TOKEN_TYPE::AND)
 			{

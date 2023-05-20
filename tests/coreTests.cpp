@@ -6,6 +6,19 @@
 using namespace tcpp;
 
 
+static bool ContainsMacro(const Preprocessor& preprocessor, const std::string& macroIdentifier)
+{
+	const auto& symTable = preprocessor.GetSymbolsTable();
+
+	auto it = std::find_if(symTable.cbegin(), symTable.cend(), [&macroIdentifier](auto&& symTableEntry)
+	{
+		return symTableEntry.mName == macroIdentifier;
+	});
+
+	return it != symTable.cend();
+}
+
+
 TEST_CASE("Preprocessor Tests")
 {
 	auto errorCallback = [](const TErrorInfo&)
@@ -474,14 +487,7 @@ TEST_CASE("Preprocessor Tests")
 		std::string str = preprocessor.Process();
 
 		/// \note symbol table should contain Foo macro
-		const auto& symTable = preprocessor.GetSymbolsTable();
-		
-		auto it = std::find_if(symTable.cbegin(), symTable.cend(), [](auto&& symTableEntry)
-		{
-			return symTableEntry.mName == "Foo";
-		});
-
-		REQUIRE(it != symTable.cend());
+		REQUIRE(ContainsMacro(preprocessor, "Foo"));
 		REQUIRE((result && str.empty()));
 	}
 
@@ -504,5 +510,142 @@ TEST_CASE("Preprocessor Tests")
 		std::string str = preprocessor.Process();
 
 		REQUIRE((result && str == expectedResult));
+	}
+
+	SECTION("TestProcess_EvaluateExpressionsInDefines_AllExpressionsShouldBeComputedCorrectly")
+	{
+		std::string inputSource = R"(
+			#define A 1
+			#define C 0
+			#define FOO(X, Y) (X && Y)
+			
+			#if A && B
+				#define PASSED_0
+			#else
+				#define FAILED_0
+			#endif
+
+			#if A || B
+				#define PASSED_1
+			#else
+				#define FAILED_1
+			#endif
+
+			#if !A
+				#define PASSED_2
+			#else
+				#define FAILED_2
+			#endif
+
+			#if A + B
+				#define PASSED_3
+			#else
+				#define FAILED_3
+			#endif
+
+			#if A - B
+				#define PASSED_4
+			#else
+				#define FAILED_4
+			#endif
+
+			#if A * B
+				#define PASSED_5
+			#else
+				#define FAILED_5
+			#endif
+
+			#if A / B
+				#define PASSED_6
+			#else
+				#define FAILED_6
+			#endif
+
+			#if C
+				#define PASSED_7
+			#else
+				#define FAILED_7
+			#endif
+)";
+
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		});
+
+		std::string str = preprocessor.Process();
+
+		REQUIRE(!ContainsMacro(preprocessor, "PASSED_0"));
+		REQUIRE(ContainsMacro(preprocessor, "FAILED_0"));
+
+		REQUIRE(ContainsMacro(preprocessor, "PASSED_1"));
+		REQUIRE(!ContainsMacro(preprocessor, "FAILED_1"));
+
+		REQUIRE(!ContainsMacro(preprocessor, "PASSED_2"));
+		REQUIRE(ContainsMacro(preprocessor, "FAILED_2"));
+
+		REQUIRE(ContainsMacro(preprocessor, "PASSED_3"));
+		REQUIRE(!ContainsMacro(preprocessor, "FAILED_3"));
+
+		REQUIRE(ContainsMacro(preprocessor, "PASSED_4"));
+		REQUIRE(!ContainsMacro(preprocessor, "FAILED_4"));
+
+		REQUIRE(!ContainsMacro(preprocessor, "PASSED_5"));
+		REQUIRE(ContainsMacro(preprocessor, "FAILED_5"));
+
+		REQUIRE(!ContainsMacro(preprocessor, "PASSED_6"));
+		REQUIRE(ContainsMacro(preprocessor, "FAILED_6"));
+
+		REQUIRE(!ContainsMacro(preprocessor, "PASSED_7"));
+		REQUIRE(ContainsMacro(preprocessor, "FAILED_7"));
+
+		REQUIRE(result);
+	}
+
+	SECTION("TestProcess_EvaluateMacroFunctionExpressions_MacroFunctionShouldBeExpandedBeforeEvaluation")
+	{
+		std::string inputSource = R"(
+			#define A 1
+			#define AND(X, Y) (X && Y)
+			
+			#if AND(A, 0)
+				#define PASSED
+			#else
+				#define FAILED
+			#endif
+
+			#if AND(A, 1)
+				#define PASSED_1
+			#else
+				#define FAILED_1
+			#endif
+)";
+
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		});
+
+		std::string str = preprocessor.Process();
+
+		REQUIRE(!ContainsMacro(preprocessor, "PASSED"));
+		REQUIRE(ContainsMacro(preprocessor, "FAILED"));
+
+		REQUIRE(ContainsMacro(preprocessor, "PASSED_1"));
+		REQUIRE(!ContainsMacro(preprocessor, "FAILED_1"));
+
+		REQUIRE(result);
 	}
 }
