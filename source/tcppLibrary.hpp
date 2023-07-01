@@ -1397,16 +1397,23 @@ namespace tcpp
 		}
 
 		while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE);
-		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
-
-		IInputStream* pInputStream = mOnIncludeCallback(path, isSystemPathInclusion);
-		if (!pInputStream)
+		
+		if (E_TOKEN_TYPE::NEWLINE != currToken.mType && E_TOKEN_TYPE::END != currToken.mType)
 		{
-			TCPP_ASSERT(false);
-			return;
+			mOnErrorCallback({ E_ERROR_TYPE::UNEXPECTED_TOKEN, mpLexer->GetCurrLineIndex() });
 		}
 
-		mpLexer->PushStream(*pInputStream);
+		if (mOnIncludeCallback)
+		{
+			IInputStream* pInputStream = mOnIncludeCallback(path, isSystemPathInclusion);
+			if (!pInputStream)
+			{
+				TCPP_ASSERT(false);
+				return;
+			}
+
+			mpLexer->PushStream(*pInputStream);
+		}
 	}
 
 	Preprocessor::TIfStackEntry Preprocessor::_processIfConditional() TCPP_NOEXCEPT

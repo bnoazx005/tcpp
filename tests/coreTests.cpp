@@ -648,4 +648,22 @@ TEST_CASE("Preprocessor Tests")
 
 		REQUIRE(result);
 	}
+
+	SECTION("TestProcess_PassIncludeDirectiveWithoutNewlineEscapeSequence_DirectiveShouldBeProcessedCorrectly")
+	{
+		std::string inputSource = "#include <iostream>";
+
+		StringInputStream input(inputSource);
+		Lexer lexer(input);
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		});
+
+		std::string str = preprocessor.Process();
+	}
 }
