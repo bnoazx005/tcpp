@@ -43,6 +43,7 @@
 #include <unordered_map>
 #include <cctype>
 #include <sstream>
+#include <memory>
 
 
 ///< Library's configs
@@ -77,6 +78,9 @@ namespace tcpp
 			virtual std::string ReadLine() TCPP_NOEXCEPT = 0;
 			virtual bool HasNextLine() const TCPP_NOEXCEPT = 0;
 	};
+
+	
+	using TInputStreamUniquePtr = std::unique_ptr<IInputStream>;
 
 
 	/*!
@@ -179,12 +183,12 @@ namespace tcpp
 	{
 		private:
 			using TTokensQueue = std::list<TToken>;
-			using TStreamStack = std::stack<IInputStream*>;
+			using TStreamStack = std::stack<TInputStreamUniquePtr>;
 			using TDirectivesMap = std::vector<std::tuple<std::string, E_TOKEN_TYPE>>;
 			using TDirectiveHandlersArray = std::unordered_set<std::string>;
 		public:
 			Lexer() TCPP_NOEXCEPT = delete;
-			explicit Lexer(IInputStream& inputStream) TCPP_NOEXCEPT;
+			explicit Lexer(TInputStreamUniquePtr pIinputStream) TCPP_NOEXCEPT;
 			~Lexer() TCPP_NOEXCEPT = default;
 
 			bool AddCustomDirective(const std::string& directive) TCPP_NOEXCEPT; 
@@ -195,7 +199,7 @@ namespace tcpp
 
 			void AppendFront(const std::vector<TToken>& tokens) TCPP_NOEXCEPT;
 
-			void PushStream(IInputStream& stream) TCPP_NOEXCEPT;
+			void PushStream(TInputStreamUniquePtr stream) TCPP_NOEXCEPT;
 			void PopStream() TCPP_NOEXCEPT;
 
 			size_t GetCurrLineIndex() const TCPP_NOEXCEPT;
@@ -286,7 +290,7 @@ namespace tcpp
 	{
 		public:
 			using TOnErrorCallback = std::function<void(const TErrorInfo&)>;
-			using TOnIncludeCallback = std::function<IInputStream*(const std::string&, bool)>;
+			using TOnIncludeCallback = std::function<TInputStreamUniquePtr(const std::string&, bool)>;
 			using TSymTable = std::vector<TMacroDesc>;
 			using TContextStack = std::list<std::string>;
 			using TDirectiveHandler = std::function<std::string(Preprocessor&, Lexer&, const std::string&)>;
@@ -415,7 +419,7 @@ namespace tcpp
 
 	const TToken Lexer::mEOFToken = { E_TOKEN_TYPE::END };
 
-	Lexer::Lexer(IInputStream& inputStream) TCPP_NOEXCEPT:
+	Lexer::Lexer(TInputStreamUniquePtr pIinputStream) TCPP_NOEXCEPT:
 		mDirectivesTable
 		{
 			{ "define", E_TOKEN_TYPE::DEFINE },
@@ -430,7 +434,7 @@ namespace tcpp
 			{ "defined", E_TOKEN_TYPE::DEFINED },
 		}, mCurrLine(), mCurrLineIndex(0)
 	{
-		PushStream(inputStream);
+		PushStream(std::move(pIinputStream));
 	}
 
 	bool Lexer::AddCustomDirective(const std::string& directive) TCPP_NOEXCEPT
@@ -477,9 +481,16 @@ namespace tcpp
 		mTokensQueue.insert(mTokensQueue.begin(), tokens.begin(), tokens.end());
 	}
 
-	void Lexer::PushStream(IInputStream& stream) TCPP_NOEXCEPT
+	void Lexer::PushStream(TInputStreamUniquePtr stream) TCPP_NOEXCEPT
 	{
-		mStreamsContext.push(&stream);
+		TCPP_ASSERT(stream);
+
+		if (!stream)
+		{
+			return;
+		}
+
+		mStreamsContext.push(std::move(stream));
 	}
 
 	void Lexer::PopStream() TCPP_NOEXCEPT
@@ -968,7 +979,7 @@ namespace tcpp
 
 	IInputStream* Lexer::_getActiveStream() const TCPP_NOEXCEPT
 	{
-		return mStreamsContext.empty() ? nullptr : mStreamsContext.top();
+		return mStreamsContext.empty() ? nullptr : mStreamsContext.top().get();
 	}
 
 
@@ -1405,14 +1416,7 @@ namespace tcpp
 
 		if (mOnIncludeCallback)
 		{
-			IInputStream* pInputStream = mOnIncludeCallback(path, isSystemPathInclusion);
-			if (!pInputStream)
-			{
-				TCPP_ASSERT(false);
-				return;
-			}
-
-			mpLexer->PushStream(*pInputStream);
+			mpLexer->PushStream(std::move(mOnIncludeCallback(path, isSystemPathInclusion)));
 		}
 	}
 

@@ -33,16 +33,14 @@ TEST_CASE("Lexer Tests")
 {
 	SECTION("TestGetNextToken_PassEmptyStream_ReturnsEndToken")
 	{
-		MockInputStream input({ "" });
-		Lexer lexer(input);
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "" }));
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
 
 	SECTION("TestGetNextToken_PassStreamWithSplittedLines_ReturnsConcatenatedBlobToken")
 	{
-		MockInputStream input({ "\\ ", " \\" });
-		Lexer lexer(input);
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "\\ ", " \\" }));
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
@@ -50,8 +48,7 @@ TEST_CASE("Lexer Tests")
 
 	SECTION("TestGetNextToken_PassStreamWithWhitespacesLines_ReturnsAllSPACEandENDTokens")
 	{
-		MockInputStream input({ "    ", "  \t " });
-		Lexer lexer(input);
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "    ", "  \t " }));
 
 		for (size_t i = 0; i < 8; i++)
 		{
@@ -63,8 +60,7 @@ TEST_CASE("Lexer Tests")
 
 	SECTION("TestGetNextToken_PassStreamWithDirectives_ReturnsCorrespondingTokens")
 	{
-		MockInputStream input({ "#define", "#if", "#else", "#elif", "#include", "#endif" });
-		Lexer lexer(input);
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "#define", "#if", "#else", "#elif", "#include", "#endif" }));
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::DEFINE);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IF);
@@ -77,8 +73,7 @@ TEST_CASE("Lexer Tests")
 
 	SECTION("TestGetNextToken_PassStreamWithIdentifiers_ReturnsIdentifierToken")
 	{
-		MockInputStream input({ "line", "_macro", "lucky_42" });
-		Lexer lexer(input);
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "line", "_macro", "lucky_42" }));
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
@@ -88,8 +83,7 @@ TEST_CASE("Lexer Tests")
 
 	SECTION("TestGetNextToken_PassStreamWithSeparators_ReturnsTheirTokens")
 	{
-		MockInputStream input({ ",()<>\"&|+-*/&&||<<>>!<=>===!="});
-		Lexer lexer(input);
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { ",()<>\"&|+-*/&&||<<>>!<=>===!=" }));
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::COMMA);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::OPEN_BRACKET);
@@ -117,8 +111,7 @@ TEST_CASE("Lexer Tests")
 
 	SECTION("TestGetNextToken_PassStreamWithLineFeeds_ReturnsNewlineToken")
 	{
-		MockInputStream input({ "line\n", "_macro\n", "lucky_42" });
-		Lexer lexer(input);
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "line\n", "_macro\n", "lucky_42" }));
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NEWLINE);
@@ -144,8 +137,7 @@ TEST_CASE("Lexer Tests")
 
 		size_t keywordsCount = keywords.size();
 
-		MockInputStream input(std::move(keywords));
-		Lexer lexer(input);
+		Lexer lexer(std::make_unique<MockInputStream>(std::move(keywords)));
 
 		for (size_t i = 0; i < keywordsCount; ++i)
 		{
@@ -156,8 +148,7 @@ TEST_CASE("Lexer Tests")
 
 	SECTION("TestGetNextToken_PassStreamWithSimpleMultilineComments_ReturnsSPACEAndENDTokens")
 	{
-		MockInputStream input({ "/*test\n"," this thing skip */ " });
-		Lexer lexer(input);
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "/*test\n", " this thing skip */ " }));
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::COMMENTARY);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
@@ -166,8 +157,7 @@ TEST_CASE("Lexer Tests")
 
 	SECTION("TestGetNextToken_PassStreamWithNestedMultilineComments_ReturnsSPACEAndENDTokens")
 	{
-		MockInputStream input({ "/*test\n"," /*\n", " */ /*test*/ this thing skip */ " });
-		Lexer lexer(input);
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "/*test\n", " /*\n", " */ /*test*/ this thing skip */ " }));
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::COMMENTARY);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
@@ -177,8 +167,7 @@ TEST_CASE("Lexer Tests")
 	SECTION("TestGetNextToken_PassStreamWithNestedMultilineComments_ReturnsSPACEAndENDTokens")
 	{
 		// \note without comments the string looks like that "id  id2 "
-		MockInputStream input({ "id /*test\n","\n", "*/ id2", "/*test this thing skip */ " });
-		Lexer lexer(input);
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "id /*test\n", "\n", "*/ id2", "/*test this thing skip */ " }));
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
@@ -192,8 +181,7 @@ TEST_CASE("Lexer Tests")
 
 	SECTION("TestAppendFront_PassFewTokensToExistingOnes_ReturnsAppendedFirstlyThenRest")
 	{
-		MockInputStream input({ "line", "_macro", "lucky_42" });
-		Lexer lexer(input);
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "line", "_macro", "lucky_42" }));
 
 		lexer.AppendFront({ { E_TOKEN_TYPE::BLOB }, { E_TOKEN_TYPE::ELIF } });
 
@@ -210,8 +198,7 @@ TEST_CASE("Lexer Tests")
 
 	SECTION("TestAppendFront_PassFewTokens_ReturnsAllOfThem")
 	{
-		MockInputStream input({ "(2, 3)" });
-		Lexer lexer(input);
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "(2, 3)" }));
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::OPEN_BRACKET);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NUMBER);
@@ -224,21 +211,14 @@ TEST_CASE("Lexer Tests")
 
 	SECTION("TestAppendFront_PassFewTokensToExistingOnes_ReturnsAppendedFirstlyThenRest")
 	{
-		MockInputStream streams[]
-		{
-			MockInputStream{ { "line\n", "another line\n" } },
-			MockInputStream{ { "(\n", ")\n" } },
-			MockInputStream{ { "+\n", "#define\n" } },
-		};
-
-		Lexer lexer(streams[0]);
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "line\n", "another line\n" }));
 
 		{
 			REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
 			REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NEWLINE);
 
 			{
-				lexer.PushStream(streams[1]);
+				lexer.PushStream(std::make_unique<MockInputStream>(std::vector<std::string> { "(\n", ")\n" }));
 
 				REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::OPEN_BRACKET);
 				REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NEWLINE);
@@ -254,7 +234,7 @@ TEST_CASE("Lexer Tests")
 			REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NEWLINE);
 
 			{
-				lexer.PushStream(streams[2]);
+				lexer.PushStream(std::make_unique<MockInputStream>(std::vector<std::string> { "+\n", "#define\n" }));
 
 				REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::PLUS);
 				REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NEWLINE);
@@ -270,8 +250,7 @@ TEST_CASE("Lexer Tests")
 
 	SECTION("TestGetNextToken_PassStreamWithStringificationOperators_ReturnsCorrespondingTokens")
 	{
-		MockInputStream input({ "# ID", "#ID", "##" });
-		Lexer lexer(input);
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "# ID", "#ID", "##" }));
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::STRINGIZE_OP);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
@@ -286,8 +265,7 @@ TEST_CASE("Lexer Tests")
 
 	SECTION("TestGetNextToken_PassNumbersInDifferentRadixes_ReturnsCorrectTokens")
 	{
-		MockInputStream input({ "42", "0x42", "042" });
-		Lexer lexer(input);
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "42", "0x42", "042" }));
 
 		for (short i = 0; i < 3; ++i)
 		{
@@ -299,8 +277,7 @@ TEST_CASE("Lexer Tests")
 
 	SECTION("TestGetNextToken_PassStreamWithKeywordLikeIdentifier_ReturnsIdentifierToken")
 	{
-		MockInputStream input({ "float4x4" });
-		Lexer lexer(input);
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "float4x4" }));
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
@@ -308,8 +285,7 @@ TEST_CASE("Lexer Tests")
 
 	SECTION("TestGetNextToken_PassStreamWithFloatingPointNumbers_ReturnsCorrectTokensSequence")
 	{
-		MockInputStream input({ "1.0001 1.00001f" });
-		Lexer lexer(input);
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "1.0001 1.00001f" }));
 
 		// \note For now we don't actually recognize floating-point numbers just process them as blobs
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NUMBER);
@@ -328,8 +304,7 @@ TEST_CASE("Lexer Tests")
 
 	SECTION("TestGetNextToken_PassTwoStringsWithConcapOp_ReturnsCorrectTokensSequence")
 	{
-		MockInputStream input({ "AAA   ## BB" });
-		Lexer lexer(input);
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "AAA   ## BB" }));
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
 
@@ -347,8 +322,7 @@ TEST_CASE("Lexer Tests")
 
 	SECTION("TestGetNextToken_PassSomeCodeThatEndsWithCommentary_ReturnsCorrectTokensSequence")
 	{
-		MockInputStream input({ "A;// comment" });
-		Lexer lexer(input);
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "A;// comment" }));
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SEMICOLON);
