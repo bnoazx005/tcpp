@@ -195,6 +195,14 @@ namespace tcpp
 
 			TToken GetNextToken() TCPP_NOEXCEPT;
 
+			/*!
+				\brief The method allows to peek token without changing current pointer
+
+				\param[in] offset Distance of overlooking, passing 0 is equivalent to invoking GetNextToken()
+			*/
+
+			TToken PeekNextToken(size_t offset = 1);
+
 			bool HasNextToken() const TCPP_NOEXCEPT;
 
 			void AppendFront(const std::vector<TToken>& tokens) TCPP_NOEXCEPT;
@@ -205,6 +213,8 @@ namespace tcpp
 			size_t GetCurrLineIndex() const TCPP_NOEXCEPT;
 			size_t GetCurrPos() const TCPP_NOEXCEPT;
 		private:
+			TToken _getNextTokenInternal(bool ignoreQueue) TCPP_NOEXCEPT;
+
 			TToken _scanTokens(std::string& inputLine) TCPP_NOEXCEPT;
 
 			std::string _requestSourceLine() TCPP_NOEXCEPT;
@@ -450,24 +460,27 @@ namespace tcpp
 
 	TToken Lexer::GetNextToken() TCPP_NOEXCEPT
 	{
-		if (!mTokensQueue.empty())
-		{
-			auto currToken = mTokensQueue.front();
-			mTokensQueue.pop_front();
+		return _getNextTokenInternal(false);
+	}
 
-			return currToken;
+	TToken Lexer::PeekNextToken(size_t offset)
+	{
+		if (!mTokensQueue.empty() && offset < mTokensQueue.size())
+		{
+			return *std::next(mTokensQueue.begin(), offset);
 		}
 
-		if (mCurrLine.empty())
+		for (size_t i = 0; i < (offset - mTokensQueue.size()); i++)
 		{
-			// \note if it's still empty then we've reached the end of the source
-			if ((mCurrLine = _requestSourceLine()).empty())
-			{
-				return mEOFToken;
-			}
+			mTokensQueue.push_back(_getNextTokenInternal(true));
 		}
 
-		return _scanTokens(mCurrLine);
+		if (mTokensQueue.empty())
+		{
+			return GetNextToken();
+		}
+
+		return mTokensQueue.back();
 	}
 
 	bool Lexer::HasNextToken() const TCPP_NOEXCEPT
@@ -584,6 +597,28 @@ namespace tcpp
 		return commentStr;
 	}
 
+
+	TToken Lexer::_getNextTokenInternal(bool ignoreQueue) TCPP_NOEXCEPT
+	{
+		if (!ignoreQueue && !mTokensQueue.empty())
+		{
+			auto currToken = mTokensQueue.front();
+			mTokensQueue.pop_front();
+
+			return currToken;
+		}
+
+		if (mCurrLine.empty())
+		{
+			// \note if it's still empty then we've reached the end of the source
+			if ((mCurrLine = _requestSourceLine()).empty())
+			{
+				return mEOFToken;
+			}
+		}
+
+		return _scanTokens(mCurrLine);
+	}
 
 	TToken Lexer::_scanTokens(std::string& inputLine) TCPP_NOEXCEPT
 	{
@@ -983,10 +1018,19 @@ namespace tcpp
 	}
 
 
+	static const std::vector<std::string> BuiltInDefines
+	{
+		"__LINE__",
+	};
+
+
 	Preprocessor::Preprocessor(Lexer& lexer, const TOnErrorCallback& onErrorCallback, const TOnIncludeCallback& onIncludeCallback) TCPP_NOEXCEPT:
 		mpLexer(&lexer), mOnErrorCallback(onErrorCallback), mOnIncludeCallback(onIncludeCallback)
 	{
-		mSymTable.push_back({ "__LINE__" });
+		for (auto&& currSystemDefine : BuiltInDefines)
+		{
+			mSymTable.push_back({ currSystemDefine });
+		}
 	}
 
 	bool Preprocessor::AddCustomDirectiveHandler(const std::string& directive, const TDirectiveHandler& handler) TCPP_NOEXCEPT
@@ -1253,7 +1297,7 @@ namespace tcpp
 		{
 			static const std::unordered_map<std::string, std::function<TToken()>> systemMacrosTable
 			{
-				{ "__LINE__", [&idToken]() { return TToken { E_TOKEN_TYPE::BLOB, std::to_string(idToken.mLineId) }; } }
+				{ BuiltInDefines[0], [&idToken]() { return TToken {E_TOKEN_TYPE::BLOB, std::to_string(idToken.mLineId)}; }} // __LINE__
 			};
 
 			auto iter = systemMacrosTable.find(macroDesc.mName);

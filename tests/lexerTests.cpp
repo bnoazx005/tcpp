@@ -329,4 +329,19 @@ TEST_CASE("Lexer Tests")
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::COMMENTARY);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
+
+	SECTION("TestPeekNextToken_IterateOverSequenceUsingOffset_CorrectlyProcessStreamAndReturnsTokens")
+	{
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "(2, 3)" }));
+
+		REQUIRE(lexer.PeekNextToken(0).mType == E_TOKEN_TYPE::OPEN_BRACKET); // PeekNextToken(0) equals to GetNextToken()
+		REQUIRE(lexer.PeekNextToken(1).mType == E_TOKEN_TYPE::NUMBER);
+		REQUIRE(lexer.PeekNextToken(2).mType == E_TOKEN_TYPE::COMMA);
+		REQUIRE(lexer.PeekNextToken(3).mType == E_TOKEN_TYPE::SPACE);
+		REQUIRE(lexer.PeekNextToken(4).mType == E_TOKEN_TYPE::NUMBER);
+		REQUIRE(lexer.PeekNextToken(5).mType == E_TOKEN_TYPE::CLOSE_BRACKET);
+		REQUIRE(lexer.PeekNextToken(6).mType == E_TOKEN_TYPE::END);
+
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NUMBER);
+	}
 }
