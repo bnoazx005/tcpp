@@ -249,8 +249,13 @@ TEST_CASE("Preprocessor Tests")
 		)";
 
 		std::string systemSource = R"(
+			#ifndef SYSTEM_H
+			#define SYSTEM_H
+
 			#define FOO3			
 			int x = 42;
+
+			#endif
 		)";
 
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
@@ -261,12 +266,12 @@ TEST_CASE("Preprocessor Tests")
 		{
 			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
 			result = false;
-		}, [&inputSource](auto&&, auto&&)
+		}, [&systemSource](auto&&, auto&&)
 		{
-			return std::make_unique<StringInputStream>("");
+			return std::make_unique<StringInputStream>(systemSource);
 		});
 
-		preprocessor.Process();
+		std::string output = preprocessor.Process();
 		REQUIRE(result);
 	}
 
@@ -634,5 +639,37 @@ TEST_CASE("Preprocessor Tests")
 		});
 
 		std::string str = preprocessor.Process();
+	}
+
+	SECTION("TestProcess_PassSourceDangerousCommentary_CorrectlyProcessThatCommentary")
+	{
+		std::string inputSource = R"(
+#ifndef FOO_H
+#define FOO_H
+
+/*int foo() {
+	return 0 ;//* 42; // this //* sequence can be considered as commentary's beginning
+}
+*/
+
+#endif
+)";
+
+		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		}, [](auto&&, auto&&)
+		{
+			return nullptr;
+		});
+
+		std::string output = preprocessor.Process();
+
+		REQUIRE((!output.empty() && output.find("#endif") == std::string::npos));
 	}
 }

@@ -85,7 +85,7 @@ namespace tcpp
 
 	/*!
 		class StringInputStream
-
+		
 		\brief The class is the simplest implementation of the input stream, which
 		is a simple string
 	*/
@@ -470,7 +470,8 @@ namespace tcpp
 			return *std::next(mTokensQueue.begin(), offset);
 		}
 
-		for (size_t i = 0; i < (offset - mTokensQueue.size()); i++)
+		const size_t count = offset - mTokensQueue.size();
+		for (size_t i = 0; i < count; i++)
 		{
 			mTokensQueue.push_back(_getNextTokenInternal(true));
 		}
@@ -565,6 +566,12 @@ namespace tcpp
 			{
 				commentStr.push_back(input.front());
 				input.erase(0, 1);
+
+				if (input.rfind("//", 0) == 0)
+				{
+					commentStr.append(input.substr(0, 2));
+					input.erase(0, 2);
+				}
 
 				if (input.rfind("/*", 0) == 0)
 				{
