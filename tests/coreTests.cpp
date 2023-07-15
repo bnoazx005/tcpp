@@ -31,7 +31,7 @@ TEST_CASE("Preprocessor Tests")
 		std::string inputSource = "void main/* this is a comment*/(/*void*/)\n{\n\treturn/*   */ 42;\n}";
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
-		Preprocessor preprocessor(lexer, errorCallback);
+		Preprocessor preprocessor(lexer, { errorCallback });
 		REQUIRE(!preprocessor.Process().empty());
 	}
 
@@ -40,7 +40,7 @@ TEST_CASE("Preprocessor Tests")
 		std::string inputSource = "#define VALUE 42\n void main()\n{\n\treturn VALUE;\n}";
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
-		Preprocessor preprocessor(lexer, errorCallback);
+		Preprocessor preprocessor(lexer, { errorCallback });
 		std::cout << preprocessor.Process() << std::endl;
 	}
 
@@ -49,7 +49,7 @@ TEST_CASE("Preprocessor Tests")
 		std::string inputSource = "#define VALUE\nVALUE";
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
-		Preprocessor preprocessor(lexer, errorCallback);
+		Preprocessor preprocessor(lexer, { errorCallback });
 		REQUIRE(preprocessor.Process() == "1");
 	}
 
@@ -58,7 +58,7 @@ TEST_CASE("Preprocessor Tests")
 		std::string inputSource = "#define ADD(X, Y) X + Y\n void main()\n{\n\treturn ADD(2, 3);\n}";
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
-		Preprocessor preprocessor(lexer, errorCallback);
+		Preprocessor preprocessor(lexer, { errorCallback });
 		std::cout << preprocessor.Process() << std::endl;
 	}
 
@@ -70,7 +70,7 @@ TEST_CASE("Preprocessor Tests")
 		const std::tuple<std::string, bool> expectedPaths[]{ { "system", true }, { "non_system_path", false } };
 		short currExpectedPathIndex = 0;
 
-		Preprocessor preprocessor(lexer, errorCallback, [&inputSource, &currExpectedPathIndex, &expectedPaths](const std::string& path, bool isSystem)
+		Preprocessor preprocessor(lexer, { errorCallback, [&inputSource, &currExpectedPathIndex, &expectedPaths](const std::string& path, bool isSystem)
 		{
 			auto expectedResultPair = expectedPaths[currExpectedPathIndex++];
 
@@ -78,7 +78,7 @@ TEST_CASE("Preprocessor Tests")
 			REQUIRE(isSystem == std::get<bool>(expectedResultPair));
 
 			return std::make_unique<StringInputStream>("");
-		});
+		} });
 		preprocessor.Process();
 	}
 
@@ -87,7 +87,7 @@ TEST_CASE("Preprocessor Tests")
 		std::string inputSource = "__LINE__\n__LINE__\n__LINE__";
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
-		Preprocessor preprocessor(lexer, errorCallback);
+		Preprocessor preprocessor(lexer, { errorCallback });
 		REQUIRE(preprocessor.Process() == "1\n2\n3");
 	}
 
@@ -96,7 +96,7 @@ TEST_CASE("Preprocessor Tests")
 		std::string inputSource = "#define FOO(Name) #Name\n FOO(Text)";
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
-		Preprocessor preprocessor(lexer, errorCallback);
+		Preprocessor preprocessor(lexer, { errorCallback });
 		REQUIRE(preprocessor.Process() == " Text");
 	}
 
@@ -115,7 +115,7 @@ TEST_CASE("Preprocessor Tests")
 		std::string inputSource = "#if FOO\none#endif\n two three";
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
-		Preprocessor preprocessor(lexer, errorCallback);
+		Preprocessor preprocessor(lexer, { errorCallback });
 		REQUIRE(preprocessor.Process() == "\n two three");
 	}
 
@@ -124,7 +124,7 @@ TEST_CASE("Preprocessor Tests")
 		std::string inputSource = "#if FOO\n // this block will be skiped\n if block\n#else\n else block #endif";
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
-		Preprocessor preprocessor(lexer, errorCallback);
+		Preprocessor preprocessor(lexer, { errorCallback });
 		REQUIRE(preprocessor.Process() == "\n else block ");
 	}
 	
@@ -133,7 +133,7 @@ TEST_CASE("Preprocessor Tests")
 		std::string inputSource = "#if 1\n if block\n#else\n else block #endif";
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
-		Preprocessor preprocessor(lexer, errorCallback);
+		Preprocessor preprocessor(lexer, { errorCallback });
 		REQUIRE(preprocessor.Process() == " if block\n");
 	}
 
@@ -142,7 +142,7 @@ TEST_CASE("Preprocessor Tests")
 		std::string inputSource = "#if 0\none\n#elif 1\ntwo\n#else\nthree\n#endif";
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
-		Preprocessor preprocessor(lexer, errorCallback);
+		Preprocessor preprocessor(lexer, { errorCallback });
 		REQUIRE(preprocessor.Process() == "two\n");
 	}
 
@@ -151,7 +151,7 @@ TEST_CASE("Preprocessor Tests")
 		std::string inputSource = "#if 0\none\n#elif 0\ntwo\n#elif 1\nthree\n#else\nfour\n#endif";
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
-		Preprocessor preprocessor(lexer, errorCallback);
+		Preprocessor preprocessor(lexer, { errorCallback });
 		REQUIRE(preprocessor.Process() == "three\n");
 	}
 
@@ -162,10 +162,10 @@ TEST_CASE("Preprocessor Tests")
 
 		bool result = false;
 
-		Preprocessor preprocessor(lexer, [&result](auto&&)
+		Preprocessor preprocessor(lexer, { [&result](auto&&)
 		{
 			result = true;
-		}); 
+		} });
 
 		preprocessor.Process();
 		REQUIRE(result);
@@ -176,7 +176,7 @@ TEST_CASE("Preprocessor Tests")
 		std::string inputSource = "#if 1\none\n#if 0\ntwo\n#endif\nfour\n#elif 0\nthree\n#endif";
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
-		Preprocessor preprocessor(lexer, errorCallback);
+		Preprocessor preprocessor(lexer, { errorCallback });
 		REQUIRE(preprocessor.Process() == "one\n\nfour\n");
 	}
 
@@ -185,7 +185,7 @@ TEST_CASE("Preprocessor Tests")
 		std::string inputSource = "#ifdef FOO\none\n#endif\ntwo";
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
-		Preprocessor preprocessor(lexer, errorCallback);
+		Preprocessor preprocessor(lexer, { errorCallback });
 		REQUIRE(preprocessor.Process() == "\ntwo");
 	}
 
@@ -194,7 +194,7 @@ TEST_CASE("Preprocessor Tests")
 		std::string inputSource = "#ifndef FOO\none\n#endif\ntwo";
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
-		Preprocessor preprocessor(lexer, errorCallback);
+		Preprocessor preprocessor(lexer, { errorCallback });
 		REQUIRE(preprocessor.Process() == "one\n\ntwo");
 	}
 
@@ -203,7 +203,7 @@ TEST_CASE("Preprocessor Tests")
 		std::string inputSource = "#define FOO\n#ifdef FOO\none\n#endif";
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
-		Preprocessor preprocessor(lexer, errorCallback);
+		Preprocessor preprocessor(lexer, { errorCallback });
 		REQUIRE(preprocessor.Process() == "one\n");
 	}
 
@@ -215,14 +215,14 @@ TEST_CASE("Preprocessor Tests")
 
 		bool result = true;
 
-		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
 		{
 			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
 			result = false;
 		}, [&systemInput](auto&&, auto&&)
 		{
 			return std::make_unique<StringInputStream>(systemInput);
-		});
+		} });
 
 		REQUIRE((result && (preprocessor.Process() == "one\ntwo")));
 	}
@@ -262,14 +262,14 @@ TEST_CASE("Preprocessor Tests")
 
 		bool result = true;
 
-		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
 		{
 			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
 			result = false;
 		}, [&systemSource](auto&&, auto&&)
 		{
 			return std::make_unique<StringInputStream>(systemSource);
-		});
+		} });
 
 		std::string output = preprocessor.Process();
 		REQUIRE(result);
@@ -282,11 +282,11 @@ TEST_CASE("Preprocessor Tests")
 
 		bool result = true;
 
-		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
 		{
 			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
 			result = false;
-		});
+		} });
 
 		std::cout << preprocessor.Process() << std::endl;
 		REQUIRE(result);
@@ -299,11 +299,11 @@ TEST_CASE("Preprocessor Tests")
 
 		bool result = true;
 
-		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
 		{
 			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
 			result = false;
-		});
+		} });
 
 		auto&& output = preprocessor.Process();
 		std::cout << output << std::endl;
@@ -317,11 +317,11 @@ TEST_CASE("Preprocessor Tests")
 
 		bool result = true;
 
-		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
 		{
 			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
 			result = false;
-		});
+		} });
 
 		auto&& output = preprocessor.Process();
 		std::cout << output << std::endl;
@@ -335,11 +335,11 @@ TEST_CASE("Preprocessor Tests")
 
 		bool result = true;
 
-		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
 		{
 			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
 			result = false;
-		});
+		} });
 
 		std::string str = preprocessor.Process();
 		std::cout << str << std::endl;
@@ -356,11 +356,11 @@ TEST_CASE("Preprocessor Tests")
 
 		bool result = true;
 
-		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
 		{
 			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
 			result = false;
-		});
+		} });
 
 		REQUIRE((result && (preprocessor.Process() == expectedResult)));
 	}
@@ -374,11 +374,11 @@ TEST_CASE("Preprocessor Tests")
 
 		bool result = true;
 
-		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
 		{
 			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
 			result = false;
-		});
+		} });
 
 		std::string actualResult = preprocessor.Process();
 		std::cout << actualResult << std::endl;
@@ -402,11 +402,11 @@ TEST_CASE("Preprocessor Tests")
 
 		bool result = true;
 
-		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
 		{
 			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
 			result = false;
-		});
+		} });
 
 		std::string actualResult = preprocessor.Process();
 		std::cout << actualResult << std::endl;
@@ -438,11 +438,11 @@ TEST_CASE("Preprocessor Tests")
 
 		bool result = true;
 
-		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
 		{
 			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
 			result = false;
-		});
+		} });
 
 		std::string actualResult = preprocessor.Process();
 		REQUIRE((result && (actualResult == expectedResult)));
@@ -456,11 +456,11 @@ TEST_CASE("Preprocessor Tests")
 
 		bool result = true;
 
-		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
 		{
 			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
 			result = false;
-		});
+		} });
 
 		std::string str = preprocessor.Process();
 
@@ -478,11 +478,11 @@ TEST_CASE("Preprocessor Tests")
 
 		bool result = true;
 
-		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
 		{
 			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
 			result = false;
-		});
+		} });
 
 		std::string str = preprocessor.Process();
 
@@ -549,11 +549,11 @@ TEST_CASE("Preprocessor Tests")
 
 		bool result = true;
 
-		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
 		{
 			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
 			result = false;
-		});
+		} });
 
 		std::string str = preprocessor.Process();
 
@@ -607,11 +607,11 @@ TEST_CASE("Preprocessor Tests")
 
 		bool result = true;
 
-		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
 		{
 			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
 			result = false;
-		});
+		} });
 
 		std::string str = preprocessor.Process();
 
@@ -632,11 +632,11 @@ TEST_CASE("Preprocessor Tests")
 
 		bool result = true;
 
-		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
 		{
 			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
 			result = false;
-		});
+		} });
 
 		std::string str = preprocessor.Process();
 	}
@@ -659,17 +659,45 @@ TEST_CASE("Preprocessor Tests")
 
 		bool result = true;
 
-		Preprocessor preprocessor(lexer, [&result](auto&& arg)
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
 		{
 			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
 			result = false;
 		}, [](auto&&, auto&&)
 		{
 			return nullptr;
-		});
+		} });
 
 		std::string output = preprocessor.Process();
 
 		REQUIRE((!output.empty() && output.find("#endif") == std::string::npos));
+	}
+
+	SECTION("TestProcess_PassSourceWithCommentPreprocessorSkipsThem_TheOutputDoesntContainComments")
+	{
+		std::string inputSource = R"(
+int main(int argc, char** argv) {
+	// TEST COMMENT
+	return -1;
+}
+)";
+
+		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		}, [](auto&&, auto&&)
+		{
+			return nullptr;
+		}, 
+		true });
+
+		std::string output = preprocessor.Process();
+
+		REQUIRE((!output.empty() && output.find("COMMENT") == std::string::npos));
 	}
 }

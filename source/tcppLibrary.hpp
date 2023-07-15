@@ -306,6 +306,14 @@ namespace tcpp
 			using TDirectiveHandler = std::function<std::string(Preprocessor&, Lexer&, const std::string&)>;
 			using TDirectivesMap = std::unordered_map<std::string, TDirectiveHandler>;
 
+			typedef struct TPreprocessorConfigInfo
+			{
+				TOnErrorCallback   mOnErrorCallback = {};
+				TOnIncludeCallback mOnIncludeCallback = {};
+
+				bool               mSkipComments = false; ///< When it's true all tokens which are E_TOKEN_TYPE::COMMENTARY will be thrown away from preprocessor's output
+			} TPreprocessorConfigInfo, * TPreprocessorConfigInfoPtr;
+
 			typedef struct TIfStackEntry
 			{
 				bool mShouldBeSkipped = true;
@@ -319,7 +327,7 @@ namespace tcpp
 		public:
 			Preprocessor() TCPP_NOEXCEPT = delete;
 			Preprocessor(const Preprocessor&) TCPP_NOEXCEPT = delete;
-			Preprocessor(Lexer& lexer, const TOnErrorCallback& onErrorCallback = {}, const TOnIncludeCallback& onIncludeCallback = {}) TCPP_NOEXCEPT;
+			Preprocessor(Lexer& lexer, const TPreprocessorConfigInfo& config = {}) TCPP_NOEXCEPT;
 			~Preprocessor() TCPP_NOEXCEPT = default;
 
 			bool AddCustomDirectiveHandler(const std::string& directive, const TDirectiveHandler& handler) TCPP_NOEXCEPT;
@@ -350,12 +358,16 @@ namespace tcpp
 			bool _shouldTokenBeSkipped() const TCPP_NOEXCEPT;
 		private:
 			Lexer* mpLexer;
-			TOnErrorCallback mOnErrorCallback;
+
+			TOnErrorCallback   mOnErrorCallback;
 			TOnIncludeCallback mOnIncludeCallback;
+
 			TSymTable mSymTable;
 			mutable TContextStack mContextStack;
 			TIfStack mConditionalBlocksStack;
 			TDirectivesMap mCustomDirectivesHandlersMap;
+
+			bool mSkipCommentsTokens;
 	};
 
 
@@ -1031,8 +1043,8 @@ namespace tcpp
 	};
 
 
-	Preprocessor::Preprocessor(Lexer& lexer, const TOnErrorCallback& onErrorCallback, const TOnIncludeCallback& onIncludeCallback) TCPP_NOEXCEPT:
-		mpLexer(&lexer), mOnErrorCallback(onErrorCallback), mOnIncludeCallback(onIncludeCallback)
+	Preprocessor::Preprocessor(Lexer& lexer, const TPreprocessorConfigInfo& config) TCPP_NOEXCEPT:
+		mpLexer(&lexer), mOnErrorCallback(config.mOnErrorCallback), mOnIncludeCallback(config.mOnIncludeCallback), mSkipCommentsTokens(config.mSkipComments)
 	{
 		for (auto&& currSystemDefine : BuiltInDefines)
 		{
@@ -1171,6 +1183,11 @@ namespace tcpp
 					}
 					break;
 				default:
+					if (E_TOKEN_TYPE::COMMENTARY == currToken.mType && mSkipCommentsTokens)
+					{
+						break;
+					}
+
 					appendString(currToken.mRawView);
 					break;
 			}
