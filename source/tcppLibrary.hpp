@@ -327,7 +327,7 @@ namespace tcpp
 		public:
 			Preprocessor() TCPP_NOEXCEPT = delete;
 			Preprocessor(const Preprocessor&) TCPP_NOEXCEPT = delete;
-			Preprocessor(Lexer& lexer, const TPreprocessorConfigInfo& config = {}) TCPP_NOEXCEPT;
+			Preprocessor(Lexer& lexer, const TPreprocessorConfigInfo& config) TCPP_NOEXCEPT;
 			~Preprocessor() TCPP_NOEXCEPT = default;
 
 			bool AddCustomDirectiveHandler(const std::string& directive, const TDirectiveHandler& handler) TCPP_NOEXCEPT;
