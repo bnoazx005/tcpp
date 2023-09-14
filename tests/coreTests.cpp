@@ -513,8 +513,44 @@ TEST_CASE("Preprocessor Tests")
 		REQUIRE((result && (actualResult == expectedResult)));
 	}
 
-	SECTION("TestProcess_PassDefineThatSeparatedWithSpaces_ReturnsCorrectProcessedSource")
+	SECTION("TestProcess_VA_ARGS")
 	{
+        std::string inputSource = "#define DO_STUFF(x, ...) x.do_stuf(); __VA_ARGS__\n int main() { DO_STUFF(2, 3+5, 4); }";
+
+        Lexer lexer(std::make_unique<StringInputStream>(inputSource));
+
+        Preprocessor preprocessor(lexer, { [](const TErrorInfo& err)
+        {
+            std::cout << "Error" << ErrorTypeToString(err.mType) << "\n";
+        } });
+
+        std::cout << preprocessor.Process() << "\n";
+	}
+
+	SECTION("TestProcess_VA_ARGS_MultiExpand")
+	{
+        std::string inputSource = R"(
+#define HEAD(x, ...) x
+#define TAIL(x, ...) __VA_ARGS__
+
+int main()
+{
+    return TAIL(1, 2, 3);
+}
+)";
+
+        Lexer lexer(std::make_unique<StringInputStream>(inputSource));
+
+        Preprocessor preprocessor(lexer, { [](const TErrorInfo& err)
+        {
+            std::cout << "Error" << ErrorTypeToString(err.mType) << "\n";
+        } });
+
+        std::cout << preprocessor.Process() << "\n";
+	}
+
+    SECTION("TestProcess_PassDefineThatSeparatedWithSpaces_ReturnsCorrectProcessedSource")
+    {
 		std::string inputSource = "#   define Foo";
 		
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));

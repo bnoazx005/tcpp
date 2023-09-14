@@ -1518,7 +1518,9 @@ namespace tcpp
 			}
 		}
 
-		if (processingTokens.size() != macroDesc.mArgsNames.size() && !macroDesc.mVariadic)
+		if(macroDesc.mVariadic ?
+			(processingTokens.size() + 1 < macroDesc.mArgsNames.size()) :
+			(processingTokens.size()    != macroDesc.mArgsNames.size()))
 		{
 			mOnErrorCallback({ E_ERROR_TYPE::INCONSISTENT_MACRO_ARITY, mpLexer->GetCurrLineIndex() });
 		}
