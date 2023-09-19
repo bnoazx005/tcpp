@@ -344,4 +344,19 @@ TEST_CASE("Lexer Tests")
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NUMBER);
 	}
+	
+	SECTION("TestGetNextToken_StringWithDifferentStylesOfCarriageReturn_CorrectlyRecognizesNewlineToken")
+	{
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "#define WIN_STYLE\r\n#define UNIX_STYLE\n" }));
+
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::DEFINE); 
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE); 
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER); 
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NEWLINE);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::DEFINE);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NEWLINE);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
+	}
 }

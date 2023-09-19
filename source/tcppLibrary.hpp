@@ -683,7 +683,7 @@ namespace tcpp
 				}
 			}
 
-			if (ch == '\n')
+			if (ch == '\n' || ch == '\r')
 			{
 				// flush current blob
 				if (!currStr.empty())
@@ -691,8 +691,17 @@ namespace tcpp
 					return { E_TOKEN_TYPE::BLOB, currStr, mCurrLineIndex };
 				}
 
-				mCurrPos = std::get<size_t>(EatNextChar(inputLine, mCurrPos));
-				return { E_TOKEN_TYPE::NEWLINE, "\n", mCurrLineIndex, mCurrPos };
+				std::string separatorStr;
+				separatorStr.push_back(ch);
+
+				const char nextCh = PeekNextChar(inputLine, 1);
+				if (ch == '\r' && nextCh == '\n')
+				{
+					separatorStr.push_back(nextCh);
+				}
+
+				mCurrPos = std::get<size_t>(EatNextChar(inputLine, mCurrPos, separatorStr.length()));
+				return { E_TOKEN_TYPE::NEWLINE, separatorStr, mCurrLineIndex, mCurrPos};
 			}
 
 			if (std::isspace(ch))
