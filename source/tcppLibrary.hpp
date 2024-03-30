@@ -31,7 +31,6 @@
 
 #pragma once
 
-
 #include <string>
 #include <functional>
 #include <vector>
@@ -312,7 +311,7 @@ namespace tcpp
 				TOnIncludeCallback mOnIncludeCallback = {};
 
 				bool               mSkipComments = false; ///< When it's true all tokens which are E_TOKEN_TYPE::COMMENTARY will be thrown away from preprocessor's output
-			} TPreprocessorConfigInfo, * TPreprocessorConfigInfoPtr;
+			} TPreprocessorConfigInfo, *TPreprocessorConfigInfoPtr;
 
 			typedef struct TIfStackEntry
 			{
@@ -1239,6 +1238,12 @@ namespace tcpp
 
 				while ((currToken = lexer.GetNextToken()).mType != E_TOKEN_TYPE::NEWLINE)
 				{
+					if (E_TOKEN_TYPE::IDENTIFIER == currToken.mType && currToken.mRawView == desc.mName)
+					{
+						desc.mValue.emplace_back(TToken{ E_TOKEN_TYPE::BLOB, currToken.mRawView }); // \note Prevent self recursion
+						continue;
+					}
+
 					desc.mValue.push_back(currToken);
 				}
 			}
@@ -1332,6 +1337,11 @@ namespace tcpp
 			{
 				{ BuiltInDefines[0], [&idToken]() { return TToken {E_TOKEN_TYPE::BLOB, std::to_string(idToken.mLineId)}; }} // __LINE__
 			};
+
+			if (E_TOKEN_TYPE::CONCAT_OP == mpLexer->PeekNextToken().mType) // If an argument is stringized or concatenated, the prescan does not occur.
+			{
+				return { TToken { E_TOKEN_TYPE::BLOB, macroDesc.mName } }; // BLOB type is used instead of IDENTIFIER to prevent infinite loop
+			}
 
 			auto iter = systemMacrosTable.find(macroDesc.mName);
 			if (iter != systemMacrosTable.cend())

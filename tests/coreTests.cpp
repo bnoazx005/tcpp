@@ -700,4 +700,84 @@ int main(int argc, char** argv) {
 
 		REQUIRE((!output.empty() && output.find("COMMENT") == std::string::npos));
 	}
+
+	SECTION("TestProcess_PassMacroIntoFuncMacroWithConcatenation_MacroExpansionIsOmitted")
+	{
+		std::string inputSource = R"(
+#define STRCAT(a, b) a ## b
+STRCAT(__LINE__, b)
+STRCAT(a, __LINE__)
+)";
+
+		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		}, [](auto&&, auto&&)
+		{
+			return nullptr;
+		},
+		true });
+
+		std::string output = preprocessor.Process();
+
+		REQUIRE(output == "\n__LINE__b\na__LINE__\n"); // If an argument is stringized or concatenated, the prescan does not occur and macro is not expanded
+	}
+
+	SECTION("TestProcess_PassMacroIntoFuncMacroWithinAnotherFuncMacro_MacrosExpanded")
+	{
+		std::string inputSource = R"(
+#define STRCAT(a, b) a##b
+#define STRCAT1(a, b) STRCAT(a, b)
+STRCAT1(__LINE__, b)
+)";
+
+		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		}, [](auto&&, auto&&)
+		{
+			return nullptr;
+		},
+		true });
+
+		std::string output = preprocessor.Process();
+
+		REQUIRE(output == "\n__LINE__3\n"); // If an argument is stringized or concatenated, the prescan does not occur and macro is not expanded
+	}
+
+	SECTION("TestProcess_DefineSelfReferencedMacro_MacroIsExpandedOnlyOnce")
+	{
+		std::string inputSource = R"(
+#define FOO 1 + FOO
+FOO
+)";
+
+		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		}, [](auto&&, auto&&)
+		{
+			return nullptr;
+		},
+		true });
+
+		std::string output = preprocessor.Process();
+
+		REQUIRE(output == "\n1 + FOO\n"); 
+	}
 }
