@@ -100,6 +100,9 @@ namespace tcpp
 
 			std::string ReadLine() TCPP_NOEXCEPT override;
 			bool HasNextLine() const TCPP_NOEXCEPT override;
+
+			StringInputStream& operator= (const StringInputStream&) TCPP_NOEXCEPT;
+			StringInputStream& operator= (StringInputStream&&) TCPP_NOEXCEPT;
 		private:
 			std::string mSourceStr;
 	};
@@ -435,6 +438,18 @@ namespace tcpp
 	bool StringInputStream::HasNextLine() const TCPP_NOEXCEPT
 	{
 		return !mSourceStr.empty();
+	}
+
+	StringInputStream& StringInputStream::operator= (const StringInputStream& stream) TCPP_NOEXCEPT
+	{
+		mSourceStr = stream.mSourceStr;
+		return *this;
+	}
+
+	StringInputStream& StringInputStream::operator= (StringInputStream&& stream) TCPP_NOEXCEPT
+	{
+		mSourceStr = std::move(stream.mSourceStr);
+		return *this;
 	}
 
 
