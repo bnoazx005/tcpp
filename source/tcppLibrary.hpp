@@ -151,7 +151,6 @@ namespace tcpp
 		NE,
 		SEMICOLON,
 		CUSTOM_DIRECTIVE,
-		COMMENTARY,
 		UNKNOWN,
 	};
 
@@ -310,8 +309,6 @@ namespace tcpp
 			{
 				TOnErrorCallback   mOnErrorCallback = {};
 				TOnIncludeCallback mOnIncludeCallback = {};
-
-				bool               mSkipComments = false; ///< When it's true all tokens which are E_TOKEN_TYPE::COMMENTARY will be thrown away from preprocessor's output
 			} TPreprocessorConfigInfo, * TPreprocessorConfigInfoPtr;
 
 			typedef struct TIfStackEntry
@@ -366,13 +363,14 @@ namespace tcpp
 			mutable TContextStack mContextStack;
 			TIfStack mConditionalBlocksStack;
 			TDirectivesMap mCustomDirectivesHandlersMap;
-
-			bool mSkipCommentsTokens;
 	};
 
 
 	///< implementation of the library is placed below
 #if defined(TCPP_IMPLEMENTATION)
+
+
+	static bool IsEscapeSequenceAtPos(const std::string& str, std::string::size_type pos);
 
 
 	std::string ErrorTypeToString(const E_ERROR_TYPE& errorType) TCPP_NOEXCEPT
@@ -407,8 +405,157 @@ namespace tcpp
 	}
 
 
+	std::string RemoveExtraWhitespaces(const std::string& str) TCPP_NOEXCEPT
+	{
+		bool isPrevChSpace = false;
+
+		std::string processedStr{ str };
+
+		processedStr.erase(std::remove_if(processedStr.begin(), processedStr.end(), [&isPrevChSpace](char ch)
+		{
+			if (ch == '\n' || ch == '\r')
+			{
+				isPrevChSpace = false;
+				return false;
+			}
+
+			bool isCurrChSpace = std::isspace(ch);
+			bool result = isCurrChSpace && isPrevChSpace;
+			isPrevChSpace = isCurrChSpace;
+
+			return result;
+		}), processedStr.end());
+
+		return processedStr;
+	}
+
+	static const std::string SINGLELINE_COMMENT_STR = "//";
+	static const std::string COMMENT_REPLACEMENT_STR = " ";
+
+
+	static std::string RemoveSingleLineComments(const std::string& source) TCPP_NOEXCEPT
+	{
+		if (source.empty())
+		{
+			return source;
+		}
+
+		std::string::size_type startPos = 0;
+		std::string::size_type endPos = 0;
+
+		std::string processedStr{ source };
+
+		while ((startPos = processedStr.find(SINGLELINE_COMMENT_STR)) != std::string::npos)
+		{
+			endPos = processedStr.find_first_of("\n\r", startPos);
+
+			if (endPos == std::string::npos)
+			{
+				return processedStr.substr(0, startPos) + COMMENT_REPLACEMENT_STR; /// assume that the rest part is a comment
+			}
+
+			processedStr = processedStr.substr(0, startPos) + COMMENT_REPLACEMENT_STR + processedStr.substr(endPos + 1, processedStr.length() - endPos);
+		}
+
+		return processedStr;
+	}
+
+
+	static constexpr std::string::size_type COMMENT_SEQUENCE_SIZE = 2; // length(/*) == 2 or length(*/) == 2
+	static const std::string MULTILINE_COMMENT_START_STR = "/*";
+	static const std::string MULTILINE_COMMENT_END_STR = "*/";
+
+
+	static std::string RemoveMultiLineComments(const std::string& source) TCPP_NOEXCEPT
+	{
+		if (source.empty())
+		{
+			return source;
+		}
+
+		std::string::size_type firstPos = 0;
+		std::string::size_type secondPos = 0;
+		std::string::size_type thirdPos = 0;
+
+		uint8_t numOfNestedCommentsBlocks = 0;
+
+		std::string::size_type seekPos;
+
+		std::string processedStr{ source };
+
+		while (((firstPos = processedStr.find(MULTILINE_COMMENT_START_STR)) != std::string::npos))
+		{
+			++numOfNestedCommentsBlocks;
+
+			seekPos = firstPos + COMMENT_SEQUENCE_SIZE;
+
+			do
+			{
+				secondPos = processedStr.find(MULTILINE_COMMENT_END_STR, seekPos);
+				thirdPos = processedStr.find(MULTILINE_COMMENT_START_STR, seekPos);
+
+				if ((secondPos == thirdPos) && (secondPos == std::string::npos))
+				{
+					break;
+				}
+
+				if (secondPos < thirdPos)
+				{
+					--numOfNestedCommentsBlocks;
+
+					seekPos = secondPos + COMMENT_SEQUENCE_SIZE;
+
+					continue;
+				}
+
+				if (thirdPos < secondPos)
+				{
+					++numOfNestedCommentsBlocks;
+
+					seekPos = thirdPos + COMMENT_SEQUENCE_SIZE;
+
+					continue;
+				}
+			} while (seekPos < processedStr.length() && (numOfNestedCommentsBlocks > 0));
+
+			if (numOfNestedCommentsBlocks == 0)
+			{
+				processedStr = processedStr.substr(0, firstPos) + COMMENT_REPLACEMENT_STR + processedStr.substr(secondPos + COMMENT_SEQUENCE_SIZE, processedStr.length() - secondPos - COMMENT_SEQUENCE_SIZE);
+			}
+			else
+			{
+				processedStr = processedStr.substr(0, firstPos);
+			}
+		}
+
+		return processedStr;
+	}
+
+
+	static std::string ProcessBackslashNewlines(const std::string& source) TCPP_NOEXCEPT
+	{
+		std::string processedStr{ source };
+
+		/// \note join lines that were splitted with backslash sign
+		std::string::size_type pos = 0;
+		while ((pos = processedStr.find_first_of('\\', pos)) != std::string::npos)
+		{
+			if (IsEscapeSequenceAtPos(processedStr, pos))
+			{
+				++pos;
+				continue; // \note ignore \n and \r within string literals
+			}
+
+			const std::string::size_type endPos = processedStr.find_first_of("\n\r", pos);
+			processedStr = processedStr.substr(0, pos) + processedStr.substr(endPos + 1);
+		}
+
+		return processedStr;
+	}
+
+
 	StringInputStream::StringInputStream(const std::string& source) TCPP_NOEXCEPT:
-		IInputStream(), mSourceStr(source)
+		IInputStream(), mSourceStr(RemoveExtraWhitespaces(RemoveSingleLineComments(RemoveMultiLineComments(ProcessBackslashNewlines(source)))))
 	{
 	}
 
@@ -553,70 +700,6 @@ namespace tcpp
 	}
 
 
-	static std::string ExtractSingleLineComment(const std::string& currInput) TCPP_NOEXCEPT
-	{
-		std::stringstream ss(currInput);
-		std::string commentStr;
-
-		std::getline(ss, commentStr, '\n');
-		return commentStr;
-	}
-
-
-	static std::string ExtractMultiLineComments(std::string& currInput, const std::function<std::string()>& requestNextLineFunctor) TCPP_NOEXCEPT
-	{
-		std::string input = currInput;
-		std::string commentStr;
-
-		// \note here below all states of DFA are placed
-		std::function<std::string(std::string&)> enterCommentBlock = [&enterCommentBlock, &commentStr, requestNextLineFunctor](std::string& input)
-		{
-			commentStr.append(input.substr(0, 2));
-			input.erase(0, 2); // \note remove /*
-
-			while (input.rfind("*/", 0) != 0 && !input.empty())
-			{
-				commentStr.push_back(input.front());
-				input.erase(0, 1);
-
-				if (input.rfind("//", 0) == 0)
-				{
-					commentStr.append(input.substr(0, 2));
-					input.erase(0, 2);
-				}
-
-				if (input.rfind("/*", 0) == 0)
-				{
-					input = enterCommentBlock(input);
-				}
-
-				if (input.empty() && requestNextLineFunctor)
-				{
-					input = requestNextLineFunctor();
-				}
-			}
-
-			commentStr.append(input.substr(0, 2));
-			input.erase(0, 2); // \note remove */
-
-			return input;
-		};
-
-		std::string::size_type pos = input.find("/*");
-		if (pos != std::string::npos)
-		{
-			std::string restStr = input.substr(pos, std::string::npos);
-			enterCommentBlock(restStr);
-
-			currInput = commentStr + restStr;
-			
-			return commentStr;
-		}
-
-		return commentStr;
-	}
-
-
 	TToken Lexer::_getNextTokenInternal(bool ignoreQueue) TCPP_NOEXCEPT
 	{
 		if (!ignoreQueue && !mTokensQueue.empty())
@@ -662,26 +745,6 @@ namespace tcpp
 		while (!inputLine.empty())
 		{
 			ch = inputLine.front();
-
-			if (ch == '/')
-			{
-				std::string commentStr;
-
-				if (PeekNextChar(inputLine, 1) == '/') // \note Found a single line C++ style comment
-				{
-					commentStr = ExtractSingleLineComment(inputLine);
-				}
-				else if (PeekNextChar(inputLine, 1) == '*') /// \note multi-line commentary
-				{
-					commentStr = ExtractMultiLineComments(inputLine, std::bind(&Lexer::_requestSourceLine, this));
-				}
-
-				if (!commentStr.empty())
-				{
-					mCurrPos = std::get<size_t>(EatNextChar(inputLine, mCurrPos, commentStr.length()));
-					return { E_TOKEN_TYPE::COMMENTARY, commentStr, mCurrLineIndex, mCurrPos };
-				}
-			}
 
 			if (ch == '\n' || ch == '\r')
 			{
@@ -894,7 +957,7 @@ namespace tcpp
 			return false;
 		}
 
-		static constexpr char escapeSymbols[] { '\'', '\\', 'n', '\"', 'a', 'b', 'f', 'r', 't', 'v' };
+		static constexpr char escapeSymbols[] { '\'', '\\', 'n', '\"', 'a', 'b', 'f', 'r', 't', 'v', 'p' };
 
 		char testedSymbol = str[pos + 1];
 
@@ -919,23 +982,7 @@ namespace tcpp
 		}
 
 		std::string sourceLine = pCurrInputStream->ReadLine();
-		++mCurrLineIndex;
-
-		/// \note join lines that were splitted with backslash sign
-		std::string::size_type pos = 0;
-		while (((pos = sourceLine.find_first_of('\\')) != std::string::npos) 
-			&& (std::isspace(PeekNextChar(sourceLine, pos + 1)) || PeekNextChar(sourceLine, pos + 1) == EOF) && !IsEscapeSequenceAtPos(sourceLine, pos))
-		{
-			if (pCurrInputStream->HasNextLine())
-			{
-				sourceLine.replace(pos ? (pos - 1) : 0, std::string::npos, pCurrInputStream->ReadLine());
-				++mCurrLineIndex;
-
-				continue;
-			}
-
-			sourceLine.erase(sourceLine.begin() + pos, sourceLine.end());
-		}
+		++mCurrLineIndex;		
 
 		return sourceLine;
 	}
@@ -1053,7 +1100,7 @@ namespace tcpp
 
 
 	Preprocessor::Preprocessor(Lexer& lexer, const TPreprocessorConfigInfo& config) TCPP_NOEXCEPT:
-		mpLexer(&lexer), mOnErrorCallback(config.mOnErrorCallback), mOnIncludeCallback(config.mOnIncludeCallback), mSkipCommentsTokens(config.mSkipComments)
+		mpLexer(&lexer), mOnErrorCallback(config.mOnErrorCallback), mOnIncludeCallback(config.mOnIncludeCallback)
 	{
 		for (auto&& currSystemDefine : BuiltInDefines)
 		{
@@ -1192,11 +1239,6 @@ namespace tcpp
 					}
 					break;
 				default:
-					if (E_TOKEN_TYPE::COMMENTARY == currToken.mType && mSkipCommentsTokens)
-					{
-						break;
-					}
-
 					appendString(currToken.mRawView);
 					break;
 			}

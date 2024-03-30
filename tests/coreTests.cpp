@@ -28,11 +28,15 @@ TEST_CASE("Preprocessor Tests")
 
 	SECTION("TestProcess_PassSourceWithoutMacros_ReturnsEquaivalentSource")
 	{
+		const std::string expectedSource = "void main ( )\n{\n\treturn 42;\n}";
 		std::string inputSource = "void main/* this is a comment*/(/*void*/)\n{\n\treturn/*   */ 42;\n}";
+
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
 		Preprocessor preprocessor(lexer, { errorCallback });
-		REQUIRE(!preprocessor.Process().empty());
+
+		const std::string actualSource = preprocessor.Process();
+		REQUIRE(actualSource == expectedSource);
 	}
 
 	SECTION("TestProcess_PassSourceWithSimpleMacro_ReturnsSourceWithExpandedMacro")
@@ -350,7 +354,7 @@ TEST_CASE("Preprocessor Tests")
 	SECTION("TestProcess_PassSourceWithFunctionMacro_ReturnsProcessedSource")
 	{
 		std::string inputSource = "#define FOO(X) \\\nint X; \\\nint X ## _Additional;\nFOO(Test)";
-		std::string expectedResult = "int Test;int Test_Additional;";
+		std::string expectedResult = "int Test; int Test_Additional;";
 
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
@@ -362,7 +366,8 @@ TEST_CASE("Preprocessor Tests")
 			result = false;
 		} });
 
-		REQUIRE((result && (preprocessor.Process() == expectedResult)));
+		const std::string actualResult = preprocessor.Process();
+		REQUIRE((result && (actualResult == expectedResult)));
 	}
 
 	SECTION("TestProcess_PassNestedFunctionMacroIntoAnotherFunctionMacro_ReturnsProcessedSource")
@@ -386,7 +391,7 @@ TEST_CASE("Preprocessor Tests")
 		REQUIRE((result && (actualResult == expectedResult)));
 	}
 
-	SECTION("TestProcess_PassEscapeSequenceInsideLiteralString_CorrectlyPreprocessIt")
+	SECTION("TestProcess_PassEscapeSequenceInsideLiteralString_EscapeSequencesWithinStringLiteralsAreIgnored")
 	{
 		std::string inputSource = R"(
 		void main() {
@@ -394,9 +399,9 @@ TEST_CASE("Preprocessor Tests")
 		})";
 
 		std::string expectedResult = R"(
-		void main() {
-			printf("test \n"); 
-		})";
+	void main() {
+	printf("test \n"); 
+	})";
 		
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
@@ -426,13 +431,12 @@ TEST_CASE("Preprocessor Tests")
 		})";
 
 		std::string expectedResult = R"(
-		Line above
+	Line above
 
-		// "\p"
-		Line below
-		float getNumber() {
-			return 1.0;
-		})";
+	Line below
+	float getNumber() {
+	return 1.0;
+	})";
 
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
@@ -467,26 +471,6 @@ TEST_CASE("Preprocessor Tests")
 		/// \note symbol table should contain Foo macro
 		REQUIRE(ContainsMacro(preprocessor, "Foo"));
 		REQUIRE((result && str.empty()));
-	}
-
-	SECTION("TestProcess_PassCodeWithCommentary_ReturnsCorrectProcessedSource")
-	{
-		std::string inputSource = "A;// Commentary";
-		std::string expectedResult = "A;// Commentary";
-
-		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
-
-		bool result = true;
-
-		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
-		{
-			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
-			result = false;
-		} });
-
-		std::string str = preprocessor.Process();
-
-		REQUIRE((result && str == expectedResult));
 	}
 
 	SECTION("TestProcess_EvaluateExpressionsInDefines_AllExpressionsShouldBeComputedCorrectly")
@@ -693,11 +677,59 @@ int main(int argc, char** argv) {
 		}, [](auto&&, auto&&)
 		{
 			return nullptr;
-		}, 
-		true });
+		}});
 
 		std::string output = preprocessor.Process();
 
 		REQUIRE((!output.empty() && output.find("COMMENT") == std::string::npos));
+	}
+
+	SECTION("TestProcess_PassSourceWithHeaderThatIncludedTwoTimesFromDifferentFiles_HeaderShouldBeIncludedOnlyOnce")
+	{
+		std::string inputSource = R"(	
+			#include <header2.h>		
+			#include <header1.h>
+		)";
+
+		std::string header1Source = R"(
+			#ifndef HEADER1_H
+			#define HEADER1_H
+
+			#include <header2.h>
+
+			int x = 0;
+
+			#endif
+		)";
+
+		std::string header2Source = R"(
+			#ifndef HEADER2_H
+			#define HEADER2_H
+
+			#define FOO(x) x
+
+			int y = 0;
+
+			#endif
+		)";
+
+		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		}, [&header1Source, &header2Source](auto&& filename, auto&&)
+		{
+			if (filename == "header1.h") return std::make_unique<StringInputStream>(header1Source);
+			if (filename == "header2.h") return std::make_unique<StringInputStream>(header2Source);
+
+			return std::make_unique<StringInputStream>("");
+		} });
+
+		std::string output = preprocessor.Process();
+		REQUIRE(result);
 	}
 }

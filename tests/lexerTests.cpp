@@ -38,26 +38,6 @@ TEST_CASE("Lexer Tests")
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
 
-	SECTION("TestGetNextToken_PassStreamWithSplittedLines_ReturnsConcatenatedBlobToken")
-	{
-		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "\\ ", " \\" }));
-
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
-	}
-
-	SECTION("TestGetNextToken_PassStreamWithWhitespacesLines_ReturnsAllSPACEandENDTokens")
-	{
-		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "    ", "  \t " }));
-
-		for (size_t i = 0; i < 8; i++)
-		{
-			REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
-		}
-
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
-	}
-
 	SECTION("TestGetNextToken_PassStreamWithDirectives_ReturnsCorrespondingTokens")
 	{
 		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "#define", "#if", "#else", "#elif", "#include", "#endif" }));
@@ -143,39 +123,6 @@ TEST_CASE("Lexer Tests")
 		{
 			REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::KEYWORD);
 		}
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
-	}
-
-	SECTION("TestGetNextToken_PassStreamWithSimpleMultilineComments_ReturnsSPACEAndENDTokens")
-	{
-		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "/*test\n", " this thing skip */ " }));
-
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::COMMENTARY);
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
-	}
-
-	SECTION("TestGetNextToken_PassStreamWithNestedMultilineComments_ReturnsSPACEAndENDTokens")
-	{
-		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "/*test\n", " /*\n", " */ /*test*/ this thing skip */ " }));
-
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::COMMENTARY);
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
-	}
-
-	SECTION("TestGetNextToken_PassStreamWithNestedMultilineComments_ReturnsSPACEAndENDTokens")
-	{
-		// \note without comments the string looks like that "id  id2 "
-		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "id /*test\n", "\n", "*/ id2", "/*test this thing skip */ " }));
-
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::COMMENTARY);
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::COMMENTARY);
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
 
@@ -317,16 +264,6 @@ TEST_CASE("Lexer Tests")
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SPACE);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
 
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
-	}
-
-	SECTION("TestGetNextToken_PassSomeCodeThatEndsWithCommentary_ReturnsCorrectTokensSequence")
-	{
-		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { "A;// comment" }));
-
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::IDENTIFIER);
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::SEMICOLON);
-		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::COMMENTARY);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
 

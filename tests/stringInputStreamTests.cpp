@@ -82,4 +82,38 @@ TEST_CASE("StringInputStream Tests")
 			REQUIRE(readLine == currLine);
 		}
 	}
+
+	SECTION("TestReadLine_PassInputStringWithSingleLineCommentary_CommentIsRemovedAndSingleSpaceReturned")
+	{
+		{
+			StringInputStream stringInputStream("//single line comment");
+			REQUIRE(stringInputStream.ReadLine() == " ");
+		}
+
+		{
+			StringInputStream stringInputStream("//single line comment\n//second comment");
+			REQUIRE(stringInputStream.ReadLine() == " "); // extra spaces are replaced with single one
+		}
+	}
+
+	SECTION("TestReadLine_PassInputStringWithMultiLineCommentary_CommentIsRemovedAndSingleSpaceReturned")
+	{
+		StringInputStream stringInputStream("/* Multi line \n comment \n ends here */");
+		REQUIRE(stringInputStream.ReadLine() == " ");
+	}
+
+	SECTION("TestReadLine_PassLogicalLineSplittedWithBackslashes_WholeLogicalLineReturnedInSingleReadLine")
+	{
+		const std::string expectedLine = " # define FOO 1020";
+
+		StringInputStream stringInputStream(R"(/\
+*
+*/ # /*
+*/ defi\
+ne FO\
+O 10\
+20)");
+
+		REQUIRE(stringInputStream.ReadLine() == expectedLine);
+	}
 }
