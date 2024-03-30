@@ -97,7 +97,7 @@ TEST_CASE("Preprocessor Tests")
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
 		Preprocessor preprocessor(lexer, { errorCallback });
-		REQUIRE(preprocessor.Process() == " Text");
+		REQUIRE(preprocessor.Process() == " \"Text\"");
 	}
 
 	/*SECTION("TestProcess_PassSourceWithConcatenationOperator_ReturnsSourceWithConcatenatedTokens")
@@ -779,5 +779,131 @@ FOO
 		std::string output = preprocessor.Process();
 
 		REQUIRE(output == "\n1 + FOO\n"); 
+	}
+
+	SECTION("TestProcess_FunctionMacroWithoutInvokation_MacroIsNotExpanded")
+	{
+		std::string inputSource = R"(
+#define FOO(X) X
+auto foo = FOO;
+)";
+
+		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		}, [](auto&&, auto&&)
+		{
+			return nullptr;
+		},
+		true });
+
+		std::string output = preprocessor.Process();
+
+		REQUIRE(output == "\nauto foo = FOO;\n");
+	}
+
+	SECTION("TestProcess_PassCommaInBracketsAsFirstArgumentInMacro_WholeBracketsBlockAssumedAsFirstArgument")
+	{
+		std::string inputSource = R"(
+#define FIRST(X, Y) X
+FIRST((1, 2) c, 3)
+)";
+
+		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		}, [](auto&&, auto&&)
+		{
+			return nullptr;
+		},
+		true });
+
+		std::string output = preprocessor.Process();
+		REQUIRE((result && output == "\n(1, 2) c\n"));
+	}
+
+	SECTION("TestProcess_StringifyOperatorInvokedOnNonParameterToken_ProcessingErrorOccurs")
+	{
+		std::string inputSource = R"(
+#define TEST(X) #value
+TEST(3)
+)";
+
+		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		}, [](auto&&, auto&&)
+		{
+			return nullptr;
+		},
+		true });
+
+		preprocessor.Process();
+		REQUIRE(!result);
+	}
+
+	SECTION("TestProcess_PassEmptyArg_MacroExpanded")
+	{
+		std::string inputSource = R"(
+#define TEST(X) X
+TEST( )
+)";
+
+		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		}, [](auto&&, auto&&)
+		{
+			return nullptr;
+		},
+		true });
+
+		preprocessor.Process();
+		REQUIRE(result);
+	}
+
+	SECTION("TestProcess_PassEmptyArgWithoutSpace_ProcessingErrorOccurs")
+	{
+		std::string inputSource = R"(
+#define TEST(X) X
+TEST()
+)";
+
+		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		}, [](auto&&, auto&&)
+		{
+			return nullptr;
+		},
+		true });
+
+		preprocessor.Process();
+		REQUIRE(!result);
 	}
 }

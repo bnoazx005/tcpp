@@ -233,7 +233,7 @@ namespace tcpp
 
 			std::string mCurrLine;
 
-			size_t mCurrLineIndex = 0;
+			size_t mCurrLineIndex = 1;
 			size_t mCurrPos = 0;
 
 			TStreamStack mStreamsContext;
@@ -271,6 +271,7 @@ namespace tcpp
 		ANOTHER_ELSE_BLOCK_FOUND,
 		ELIF_BLOCK_AFTER_ELSE_FOUND,
 		UNDEFINED_DIRECTIVE,
+		INCORRECT_OPERATION_USAGE,
 	};
 
 
@@ -1190,7 +1191,15 @@ namespace tcpp
 					appendString(currToken.mRawView);
 					break;
 				case E_TOKEN_TYPE::STRINGIZE_OP:
-					appendString((currToken = mpLexer->GetNextToken()).mRawView);
+					{
+						if (mContextStack.empty())
+						{
+							mOnErrorCallback({ E_ERROR_TYPE::INCORRECT_OPERATION_USAGE, mpLexer->GetCurrLineIndex() });
+							continue;
+						}
+
+						appendString("\"" + (currToken = mpLexer->GetNextToken()).mRawView + "\"");
+					}
 					break;
 				case E_TOKEN_TYPE::CUSTOM_DIRECTIVE:
 					{
@@ -1250,6 +1259,14 @@ namespace tcpp
 			if (currToken.mType != E_TOKEN_TYPE::NEWLINE)
 			{
 				desc.mValue.push_back(currToken);
+
+				switch (currToken.mType)
+				{
+					case E_TOKEN_TYPE::CONCAT_OP:
+						break;
+					case E_TOKEN_TYPE::STRINGIZE_OP:
+						break;
+				}
 
 				while ((currToken = lexer.GetNextToken()).mType != E_TOKEN_TYPE::NEWLINE)
 				{
@@ -1373,6 +1390,12 @@ namespace tcpp
 		auto currToken = getNextTokenCallback();
 
 		while (currToken.mType == E_TOKEN_TYPE::SPACE) { currToken = getNextTokenCallback(); } // \note skip space tokens
+		
+		if (E_TOKEN_TYPE::OPEN_BRACKET != currToken.mType)
+		{
+			return { TToken { E_TOKEN_TYPE::BLOB, macroDesc.mName }, currToken }; // \note Function like macro without brackets are is not expanded
+		}
+
 		_expect(E_TOKEN_TYPE::OPEN_BRACKET, currToken.mType);
 
 		std::vector<std::vector<TToken>> processingTokens;
@@ -1385,32 +1408,59 @@ namespace tcpp
 		{
 			currArgTokens.clear();
 
-			while ((currToken = getNextTokenCallback()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
-			currArgTokens.push_back({ currToken });
-
-			while ((currToken = getNextTokenCallback()).mType == E_TOKEN_TYPE::SPACE);
-			
-			while ((currToken.mType != E_TOKEN_TYPE::COMMA &&
-				   currToken.mType != E_TOKEN_TYPE::NEWLINE &&
-				   currToken.mType != E_TOKEN_TYPE::CLOSE_BRACKET) || currNestingLevel)
+			bool hasAnySpace = false;
+			while ((currToken = getNextTokenCallback()).mType == E_TOKEN_TYPE::SPACE) // \note skip space tokens
 			{
-				switch (currToken.mType)
+				hasAnySpace = true;
+			}
+
+			if (E_TOKEN_TYPE::CLOSE_BRACKET == currToken.mType || E_TOKEN_TYPE::COMMA == currToken.mType)
+			{
+				if (hasAnySpace)
 				{
+					currArgTokens.push_back({ E_TOKEN_TYPE::SPACE, " " });
+				}
+				else
+				{
+					break; // \note There should be at least one space for empty argument
+				}
+			}
+			else
+			{
+				currArgTokens.push_back(currToken);
+			}
+
+			if (E_TOKEN_TYPE::CLOSE_BRACKET != currToken.mType)
+			{
+				if (E_TOKEN_TYPE::OPEN_BRACKET == currToken.mType)
+				{
+					++currNestingLevel;
+				}
+
+				while ((currToken = getNextTokenCallback()).mType == E_TOKEN_TYPE::SPACE);
+
+				while ((currToken.mType != E_TOKEN_TYPE::COMMA &&
+					currToken.mType != E_TOKEN_TYPE::NEWLINE &&
+					currToken.mType != E_TOKEN_TYPE::CLOSE_BRACKET) || currNestingLevel)
+				{
+					switch (currToken.mType)
+					{
 					case E_TOKEN_TYPE::OPEN_BRACKET:
 						++currNestingLevel;
 						break;
 					case E_TOKEN_TYPE::CLOSE_BRACKET:
 						--currNestingLevel;
 						break;
+					}
+
+					currArgTokens.push_back(currToken);
+					currToken = getNextTokenCallback();
 				}
 
-				currArgTokens.push_back({ currToken });
-				currToken = getNextTokenCallback();
-			}
-
-			if (currToken.mType != E_TOKEN_TYPE::COMMA && currToken.mType != E_TOKEN_TYPE::CLOSE_BRACKET)
-			{
-				_expect(E_TOKEN_TYPE::COMMA, currToken.mType);
+				if (currToken.mType != E_TOKEN_TYPE::COMMA && currToken.mType != E_TOKEN_TYPE::CLOSE_BRACKET)
+				{
+					_expect(E_TOKEN_TYPE::COMMA, currToken.mType);
+				}
 			}
 
 			processingTokens.push_back(currArgTokens);
@@ -1458,6 +1508,10 @@ namespace tcpp
 		replacementList.push_back({ E_TOKEN_TYPE::REJECT_MACRO, macroDesc.mName });
 		return replacementList;
 	}
+
+	/*std::vector<TToken> Preprocessor::_expandMacroArg(const TMacroDesc& macroDesc, const TToken& idToken, const std::function<TToken()>& getNextTokenCallback) const TCPP_NOEXCEPT
+	{
+	}*/
 
 	void Preprocessor::_expect(const E_TOKEN_TYPE& expectedType, const E_TOKEN_TYPE& actualType) const TCPP_NOEXCEPT
 	{
