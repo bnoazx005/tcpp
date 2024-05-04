@@ -198,6 +198,71 @@ TEST_CASE("Preprocessor Tests")
 		REQUIRE(preprocessor.Process() == "one\n\ntwo");
 	}
 
+	SECTION("TestProcess_PassNestedActiveIfdefBlockInsideOfAnotherInactiveIfdefBlock_TopBlockShouldBeRejected")
+	{
+		std::string inputSource = R"(
+#define CONDITION_1
+
+#ifdef CONDITION_0
+	condition_0,
+	#ifdef CONDITION_1
+		condition_1
+	#endif
+#endif
+)";
+		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
+
+		Preprocessor preprocessor(lexer, { errorCallback });
+		std::string output = preprocessor.Process();
+		REQUIRE((output.find("condition_1") == std::string::npos && output.find("condition_0") == std::string::npos));
+	}
+
+	SECTION("TestProcess_PassNestedActiveElseBlockInsideOfAnotherInactiveIfdefBlock_TopBlockShouldBeRejected")
+	{
+		std::string inputSource = R"(
+#ifdef CONDITION_0
+	condition_0,
+	#ifdef CONDITION_1
+		condition_1
+	#else
+		condition_1_else
+	#endif
+#endif
+)";
+		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
+
+		Preprocessor preprocessor(lexer, { errorCallback });
+		std::string output = preprocessor.Process();
+		REQUIRE((
+			output.find("condition_1") == std::string::npos &&
+			output.find("condition_0") == std::string::npos &&
+			output.find("condition_1_else") == std::string::npos));
+	}
+
+	SECTION("TestProcess_PassNestedActiveElifBlockInsideOfAnotherInactiveIfdefBlock_TopBlockShouldBeRejected")
+	{
+		std::string inputSource = R"(
+#define CONDITION_2
+
+#ifdef CONDITION_0
+	condition_0,
+	#ifdef CONDITION_1
+		condition_1
+	#elif CONDITION_2
+		condition_1_else
+	#endif
+#endif
+)";
+		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
+
+		Preprocessor preprocessor(lexer, { errorCallback });
+		std::string output = preprocessor.Process();
+		REQUIRE((
+			output.find("condition_1") == std::string::npos &&
+			output.find("condition_0") == std::string::npos &&
+			output.find("condition_1_else") == std::string::npos));
+	}
+
 	SECTION("TestProcess_PassSource_ReturnsProcessedSource")
 	{
 		std::string inputSource = "#define FOO\n#ifdef FOO\none\n#endif";

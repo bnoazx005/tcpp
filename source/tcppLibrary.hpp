@@ -322,8 +322,13 @@ namespace tcpp
 				bool mShouldBeSkipped = true;
 				bool mHasElseBeenFound = false;
 				bool mHasIfBlockBeenEntered = false;
+				bool mIsParentBlockActive = true;
 
-				TIfStackEntry(bool shouldBeSkipped) : mShouldBeSkipped(shouldBeSkipped), mHasElseBeenFound(false), mHasIfBlockBeenEntered(!shouldBeSkipped) {}
+				TIfStackEntry(bool shouldBeSkipped, bool isParentBlockActive) :
+					mShouldBeSkipped(shouldBeSkipped),
+					mHasElseBeenFound(false),
+					mHasIfBlockBeenEntered(!shouldBeSkipped),
+					mIsParentBlockActive(isParentBlockActive) {}
 			} TIfStackEntry, *TIfStackEntryPtr;
 
 			using TIfStack = std::stack<TIfStackEntry>;
@@ -1089,6 +1094,13 @@ namespace tcpp
 		return true;
 	}
 
+
+	static bool inline IsParentBlockActive(const Preprocessor::TIfStack& conditionalsContext) TCPP_NOEXCEPT
+	{
+		return conditionalsContext.empty() ? true : (conditionalsContext.top().mIsParentBlockActive && !conditionalsContext.top().mShouldBeSkipped);
+	}
+
+
 	std::string Preprocessor::Process() TCPP_NOEXCEPT
 	{
 		TCPP_ASSERT(mpLexer);
@@ -1595,8 +1607,8 @@ namespace tcpp
 
 		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
 		
-		bool skip = static_cast<bool>(!_evaluateExpression(expressionTokens));
-		return TIfStackEntry(skip);
+		// \note IsDisabledBlockProcessed is used to inherit disabled state for nested blocks
+		return TIfStackEntry(static_cast<bool>(!_evaluateExpression(expressionTokens)), IsParentBlockActive(mConditionalBlocksStack));
 	}
 
 
@@ -1617,7 +1629,9 @@ namespace tcpp
 			{
 				return item.mName == macroIdentifier;
 			}) == mSymTable.cend();
-		return TIfStackEntry(skip);
+
+		// \note IsParentBlockActive is used to inherit disabled state for nested blocks
+		return TIfStackEntry(skip, IsParentBlockActive(mConditionalBlocksStack));
 	}
 
 	Preprocessor::TIfStackEntry Preprocessor::_processIfndefConditional() TCPP_NOEXCEPT
@@ -1637,7 +1651,9 @@ namespace tcpp
 			{
 				return item.mName == macroIdentifier;
 			}) != mSymTable.cend();
-		return TIfStackEntry(skip);
+
+		// \note IsParentBlockActive is used to inherit disabled state for nested blocks
+		return TIfStackEntry(skip, IsParentBlockActive(mConditionalBlocksStack));
 	}
 
 	void Preprocessor::_processElseConditional(TIfStackEntry& currStackEntry) TCPP_NOEXCEPT
@@ -1648,7 +1664,10 @@ namespace tcpp
 			return;
 		}
 
-		currStackEntry.mShouldBeSkipped  = currStackEntry.mHasIfBlockBeenEntered || !currStackEntry.mShouldBeSkipped;
+		currStackEntry.mShouldBeSkipped  = 
+			currStackEntry.mHasIfBlockBeenEntered || 
+			!currStackEntry.mShouldBeSkipped;
+
 		currStackEntry.mHasElseBeenFound = true;
 	}
 
@@ -1672,7 +1691,10 @@ namespace tcpp
 
 		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
 
-		currStackEntry.mShouldBeSkipped = currStackEntry.mHasIfBlockBeenEntered || static_cast<bool>(!_evaluateExpression(expressionTokens));
+		currStackEntry.mShouldBeSkipped =
+			currStackEntry.mHasIfBlockBeenEntered || 
+			static_cast<bool>(!_evaluateExpression(expressionTokens));
+
 		if (!currStackEntry.mShouldBeSkipped) currStackEntry.mHasIfBlockBeenEntered = true;
 	}
 
@@ -1952,7 +1974,7 @@ namespace tcpp
 
 	bool Preprocessor::_shouldTokenBeSkipped() const TCPP_NOEXCEPT
 	{
-		return !mConditionalBlocksStack.empty() && mConditionalBlocksStack.top().mShouldBeSkipped;
+		return !mConditionalBlocksStack.empty() && (mConditionalBlocksStack.top().mShouldBeSkipped || !mConditionalBlocksStack.top().mIsParentBlockActive);
 	}
 
 #endif
