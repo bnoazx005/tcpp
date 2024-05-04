@@ -125,6 +125,8 @@ namespace tcpp
 		BLOB,
 		OPEN_BRACKET,
 		CLOSE_BRACKET,
+		OPEN_SQUARE_BRACKET,
+		CLOSE_SQUARE_BRACKET,
 		COMMA,
 		NEWLINE,
 		LESS,
@@ -675,7 +677,7 @@ namespace tcpp
 			"do", "if", "static", "while"
 		};
 
-		static const std::string separators = ",()<>\"+-*/&|!=;";
+		static const std::string separators = ",()[]<>\"+-*/&|!=;";
 
 		std::string currStr = "";
 
@@ -969,7 +971,11 @@ namespace tcpp
 			case '(':
 				return { E_TOKEN_TYPE::OPEN_BRACKET, "(", mCurrLineIndex, mCurrPos };
 			case ')':
-				return { E_TOKEN_TYPE::CLOSE_BRACKET, ")", mCurrLineIndex, mCurrPos };
+				return { E_TOKEN_TYPE::CLOSE_BRACKET, ")", mCurrLineIndex, mCurrPos }; 
+			case '[':
+				return { E_TOKEN_TYPE::OPEN_SQUARE_BRACKET, "[", mCurrLineIndex, mCurrPos };
+			case ']':
+				return { E_TOKEN_TYPE::CLOSE_SQUARE_BRACKET, "]", mCurrLineIndex, mCurrPos };
 			case '<':
 				if (!inputLine.empty())
 				{

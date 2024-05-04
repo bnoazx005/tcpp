@@ -971,4 +971,26 @@ TEST()
 		preprocessor.Process();
 		REQUIRE(!result);
 	}
+
+	SECTION("TestProcess_PassDefineExpansionInBrackets_MacroCorrectlyExpanded")
+	{
+		std::string inputSource = "#define COUNT 4\nint array[COUNT];\n";
+
+		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		}, [](auto&&, auto&&)
+		{
+			return nullptr;
+		},
+		true });
+
+		std::string output = preprocessor.Process();
+		REQUIRE((result && output == "int array[4];\n"));
+	}
 }
