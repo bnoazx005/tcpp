@@ -337,7 +337,7 @@ namespace tcpp
 		public:
 			Preprocessor() TCPP_NOEXCEPT = delete;
 			Preprocessor(const Preprocessor&) TCPP_NOEXCEPT = delete;
-			Preprocessor(Lexer& lexer, const TPreprocessorConfigInfo& config) TCPP_NOEXCEPT;
+			Preprocessor(Lexer& lexer, const TPreprocessorConfigInfo& config, TSymTable userDefines = {}) TCPP_NOEXCEPT;
 			~Preprocessor() TCPP_NOEXCEPT = default;
 
 			bool AddCustomDirectiveHandler(const std::string& directive, const TDirectiveHandler& handler) TCPP_NOEXCEPT;
@@ -1078,12 +1078,17 @@ namespace tcpp
 	};
 
 
-	Preprocessor::Preprocessor(Lexer& lexer, const TPreprocessorConfigInfo& config) TCPP_NOEXCEPT:
+	Preprocessor::Preprocessor(Lexer& lexer, const TPreprocessorConfigInfo& config, TSymTable userDefines) TCPP_NOEXCEPT:
 		mpLexer(&lexer), mOnErrorCallback(config.mOnErrorCallback), mOnIncludeCallback(config.mOnIncludeCallback), mSkipCommentsTokens(config.mSkipComments)
 	{
 		for (auto&& currSystemDefine : BuiltInDefines)
 		{
 			mSymTable.push_back({ currSystemDefine });
+		}
+		
+		for (auto&& currUserDefine : userDefines)
+		{
+			mSymTable.push_back(currUserDefine);
 		}
 	}
 
