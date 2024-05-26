@@ -22,8 +22,8 @@ endif ()
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../source")
 
 # include Catch2
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/lib/Catch2/contrib/")
-add_subdirectory(lib/Catch2)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/Catch2/contrib/")
+add_subdirectory(ThirdParty/Catch2)
 
 set(HEADERS )
 
