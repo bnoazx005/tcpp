@@ -1,7 +1,6 @@
 # TCPP (Tiny C PreProcessor)
 
-[![Build Status](https://travis-ci.org/bnoazx005/tcpp.svg?branch=master)](https://travis-ci.org/bnoazx005/tcpp)
-[![Build status](https://ci.appveyor.com/api/projects/status/jjnqcd4x08wtx38r/branch/master?svg=true)](https://ci.appveyor.com/project/bnoazx005/tcpp/branch/master)
+[![Actions Status](https://github.com/dmikushin/tcpp/actions/workflows/integrate.yaml/badge.svg)](https://github.com/dmikushin/tcpp/actions)
 
 TCPP is small single-header library which provides implementation of C preprocessor (almost). Most part of the library is based upon official specifications of the preprocessor https://docs.freebsd.org/info/cpp/cpp.pdf, https://gcc.gnu.org/onlinedocs/cpp/. 
 
