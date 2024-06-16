@@ -274,6 +274,7 @@ namespace tcpp
 		ELIF_BLOCK_AFTER_ELSE_FOUND,
 		UNDEFINED_DIRECTIVE,
 		INCORRECT_OPERATION_USAGE,
+		INCORRECT_STRINGIFY_OPERATOR_USAGE,
 	};
 
 
@@ -411,6 +412,8 @@ namespace tcpp
 				return "#elif found after #else block";
 			case E_ERROR_TYPE::UNDEFINED_DIRECTIVE:
 				return "Undefined directive";
+			case E_ERROR_TYPE::INCORRECT_STRINGIFY_OPERATOR_USAGE:
+				return "Incorrect usage of stringification operation.";
 		}
 
 		return "";
@@ -1291,6 +1294,8 @@ namespace tcpp
 			{
 				desc.mValue.push_back(currToken);
 
+				const bool isStringificationOperator = currToken.mType == E_TOKEN_TYPE::STRINGIZE_OP;
+
 				switch (currToken.mType)
 				{
 					case E_TOKEN_TYPE::CONCAT_OP:
@@ -1305,6 +1310,16 @@ namespace tcpp
 					{
 						desc.mValue.emplace_back(TToken{ E_TOKEN_TYPE::BLOB, currToken.mRawView }); // \note Prevent self recursion
 						continue;
+					}
+
+					if (E_TOKEN_TYPE::IDENTIFIER == currToken.mType && isStringificationOperator) // \note Validate argument of the operator
+					{
+						auto&& macroArgs = desc.mArgsNames;
+						
+						if (std::find(macroArgs.cbegin(), macroArgs.cend(), currToken.mRawView) == macroArgs.cend())
+						{
+							mOnErrorCallback({ E_ERROR_TYPE::INCORRECT_STRINGIFY_OPERATOR_USAGE, mpLexer->GetCurrLineIndex() });
+						}
 					}
 
 					desc.mValue.push_back(currToken);

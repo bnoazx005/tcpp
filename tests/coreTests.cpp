@@ -932,7 +932,7 @@ FIRST((1, 2) c, 3)
 		std::string output = preprocessor.Process();
 		REQUIRE((result && output == "\n(1, 2) c\n"));
 	}
-#if 0
+
 	SECTION("TestProcess_StringifyOperatorInvokedOnNonParameterToken_ProcessingErrorOccurs")
 	{
 		std::string inputSource = R"(
@@ -947,6 +947,8 @@ TEST(3)
 		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
 		{
 			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+
+			REQUIRE(arg.mType == E_ERROR_TYPE::INCORRECT_STRINGIFY_OPERATOR_USAGE);
 			result = false;
 		}, [](auto&&, auto&&)
 		{
@@ -954,10 +956,10 @@ TEST(3)
 		},
 		true });
 
-		preprocessor.Process();
+		const std::string& output = preprocessor.Process();
 		REQUIRE(!result);
 	}
-#endif
+
 	SECTION("TestProcess_PassEmptyArg_MacroExpanded")
 	{
 		std::string inputSource = R"(
