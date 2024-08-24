@@ -412,8 +412,10 @@ namespace tcpp
 				return "#elif found after #else block";
 			case E_ERROR_TYPE::UNDEFINED_DIRECTIVE:
 				return "Undefined directive";
+			case E_ERROR_TYPE::INCORRECT_OPERATION_USAGE:
+				return "Incorrect operation usage";
 			case E_ERROR_TYPE::INCORRECT_STRINGIFY_OPERATOR_USAGE:
-				return "Incorrect usage of stringification operation.";
+				return "Incorrect usage of stringification operation";
 		}
 
 		return "";
@@ -1296,14 +1298,6 @@ namespace tcpp
 
 				const bool isStringificationOperator = currToken.mType == E_TOKEN_TYPE::STRINGIZE_OP;
 
-				switch (currToken.mType)
-				{
-					case E_TOKEN_TYPE::CONCAT_OP:
-						break;
-					case E_TOKEN_TYPE::STRINGIZE_OP:
-						break;
-				}
-
 				while ((currToken = lexer.GetNextToken()).mType != E_TOKEN_TYPE::NEWLINE)
 				{
 					if (E_TOKEN_TYPE::IDENTIFIER == currToken.mType && currToken.mRawView == desc.mName)
@@ -1512,6 +1506,8 @@ namespace tcpp
 						break;
 					case E_TOKEN_TYPE::CLOSE_BRACKET:
 						--currNestingLevel;
+						break;
+					default:
 						break;
 					}
 
