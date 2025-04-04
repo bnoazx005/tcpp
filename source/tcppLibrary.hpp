@@ -1687,7 +1687,10 @@ namespace tcpp
 
 		std::string macroIdentifier = currToken.mRawView;
 
-		currToken = mpLexer->GetNextToken();
+		do {
+			currToken = mpLexer->GetNextToken();
+		} while (currToken.mType == E_TOKEN_TYPE::SPACE);
+
 		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
 
 		bool skip = std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&macroIdentifier](auto&& item)
@@ -1709,7 +1712,10 @@ namespace tcpp
 
 		std::string macroIdentifier = currToken.mRawView;
 
-		currToken = mpLexer->GetNextToken();
+		do {
+			currToken = mpLexer->GetNextToken();
+		} while (currToken.mType == E_TOKEN_TYPE::SPACE);
+
 		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
 
 		bool skip = std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&macroIdentifier](auto&& item)
