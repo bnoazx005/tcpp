@@ -948,6 +948,25 @@ namespace tcpp
 		return false;
 	}
 
+	
+	/*!
+		\return The method eats all whitespace tokens (TT_SPACE, TT_COMMENTARY) and returns current token as a result
+	*/
+
+	template <typename TAction>
+	static TToken TrySkipWhitespaceTokensSequence(TAction getNextToken, const TToken& initialToken)
+	{
+		TToken currToken = initialToken;
+
+		while (currToken.mType == E_TOKEN_TYPE::SPACE)
+		{
+			currToken = getNextToken();
+		}
+
+		return currToken;
+	}
+
+
 	std::string Lexer::_requestSourceLine() TCPP_NOEXCEPT
 	{
 		IInputStream* pCurrInputStream = _getActiveStream();
@@ -1222,8 +1241,7 @@ namespace tcpp
 						processedStr.erase(processedStr.length() - 1);
 					}
 
-					while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
-
+					currToken = TrySkipWhitespaceTokensSequence([this] { return mpLexer->GetNextToken(); }, mpLexer->GetNextToken());
 					appendString(currToken.mRawView);
 					break;
 				case E_TOKEN_TYPE::STRINGIZE_OP:
@@ -1288,9 +1306,7 @@ namespace tcpp
 
 		auto extractValue = [this](TMacroDesc& desc, Lexer& lexer)
 		{
-			TToken currToken;
-
-			while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
+			TToken currToken = TrySkipWhitespaceTokensSequence([this] { return mpLexer->GetNextToken(); }, mpLexer->GetNextToken());
 
 			if (currToken.mType != E_TOKEN_TYPE::NEWLINE)
 			{
@@ -1329,6 +1345,7 @@ namespace tcpp
 		};
 
 		currToken = mpLexer->GetNextToken();
+
 		switch (currToken.mType)
 		{
 			case E_TOKEN_TYPE::SPACE:	// object like macro
@@ -1343,22 +1360,22 @@ namespace tcpp
 					// \note parse arguments
 					while (true)
 					{
-						while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
+						currToken = TrySkipWhitespaceTokensSequence([this] { return mpLexer->GetNextToken(); }, mpLexer->GetNextToken());
 
 						switch (currToken.mType)
 						{
-						case E_TOKEN_TYPE::IDENTIFIER:
-							macroDesc.mArgsNames.push_back(currToken.mRawView);
-							break;
-						case E_TOKEN_TYPE::ELLIPSIS:
-							macroDesc.mArgsNames.push_back("__VA_ARGS__");
-							macroDesc.mVariadic = true;
-							break;
-						default:
-							mOnErrorCallback({ E_ERROR_TYPE::UNEXPECTED_TOKEN, mpLexer->GetCurrLineIndex() });
+							case E_TOKEN_TYPE::IDENTIFIER:
+								macroDesc.mArgsNames.push_back(currToken.mRawView);
+								break;
+							case E_TOKEN_TYPE::ELLIPSIS:
+								macroDesc.mArgsNames.push_back("__VA_ARGS__");
+								macroDesc.mVariadic = true;
+								break;
+							default:
+								mOnErrorCallback({ E_ERROR_TYPE::UNEXPECTED_TOKEN, mpLexer->GetCurrLineIndex() });
 						}
 
-						while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE);
+						currToken = TrySkipWhitespaceTokensSequence([this] { return mpLexer->GetNextToken(); }, mpLexer->GetNextToken());
 						if (macroDesc.mVariadic)
 						{
 							_expect(E_TOKEN_TYPE::CLOSE_BRACKET, currToken.mType);
@@ -1443,13 +1460,11 @@ namespace tcpp
 		mContextStack.push_back(macroDesc.mName);
 
 		// \note function like macro's case
-		auto currToken = getNextTokenCallback();
+		auto currToken = TrySkipWhitespaceTokensSequence(getNextTokenCallback, getNextTokenCallback());
 
-		while (currToken.mType == E_TOKEN_TYPE::SPACE) { currToken = getNextTokenCallback(); } // \note skip space tokens
-		
 		if (E_TOKEN_TYPE::OPEN_BRACKET != currToken.mType)
 		{
-			return { TToken { E_TOKEN_TYPE::BLOB, macroDesc.mName }, currToken }; // \note Function like macro without brackets are is not expanded
+			return { TToken { E_TOKEN_TYPE::BLOB, macroDesc.mName }, currToken }; // \note Function like macro without brackets is not expanded
 		}
 
 		_expect(E_TOKEN_TYPE::OPEN_BRACKET, currToken.mType);
@@ -1493,7 +1508,7 @@ namespace tcpp
 					++currNestingLevel;
 				}
 
-				while ((currToken = getNextTokenCallback()).mType == E_TOKEN_TYPE::SPACE);
+				currToken = TrySkipWhitespaceTokensSequence(getNextTokenCallback, getNextTokenCallback());
 
 				while ((currToken.mType != E_TOKEN_TYPE::COMMA &&
 					currToken.mType != E_TOKEN_TYPE::NEWLINE &&
@@ -1501,14 +1516,14 @@ namespace tcpp
 				{
 					switch (currToken.mType)
 					{
-					case E_TOKEN_TYPE::OPEN_BRACKET:
-						++currNestingLevel;
-						break;
-					case E_TOKEN_TYPE::CLOSE_BRACKET:
-						--currNestingLevel;
-						break;
-					default:
-						break;
+						case E_TOKEN_TYPE::OPEN_BRACKET:
+							++currNestingLevel;
+							break;
+						case E_TOKEN_TYPE::CLOSE_BRACKET:
+							--currNestingLevel;
+							break;
+						default:
+							break;
 					}
 
 					currArgTokens.push_back(currToken);
@@ -1607,9 +1622,7 @@ namespace tcpp
 			return;
 		}
 
-		TToken currToken;
-
-		while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE); // \note skip space tokens
+		TToken currToken = TrySkipWhitespaceTokensSequence([this] { return mpLexer->GetNextToken(); }, mpLexer->GetNextToken());
 		
 		if (currToken.mType != E_TOKEN_TYPE::LESS && currToken.mType != E_TOKEN_TYPE::QUOTES)
 		{
@@ -1640,7 +1653,7 @@ namespace tcpp
 			path.append(currToken.mRawView);
 		}
 
-		while ((currToken = mpLexer->GetNextToken()).mType == E_TOKEN_TYPE::SPACE);
+		currToken = TrySkipWhitespaceTokensSequence([this] { return mpLexer->GetNextToken(); }, mpLexer->GetNextToken());
 		
 		if (E_TOKEN_TYPE::NEWLINE != currToken.mType && E_TOKEN_TYPE::END != currToken.mType)
 		{
