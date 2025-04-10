@@ -1031,4 +1031,34 @@ TEST()
 		std::string output = preprocessor.Process();
 		REQUIRE((result && output == "int array[4];\n"));
 	}
+
+	SECTION("TestProcess_ArgumentsAreExpandedFirstInFunctionLikeMacroes_Returns4aThen__LINE__a")
+	{
+		std::string inputSource = R"(
+#define foo(a, b) a ## b
+#define bar(a, b) foo(a,b)
+#define baz bar(__LINE__, a)
+baz
+
+#define moo(a, b) a ## b
+#define meow moo(__LINE__, a)
+meow)";
+
+		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
+
+		bool result = true;
+
+		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
+		{
+			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			result = false;
+		}, [](auto&&, auto&&)
+		{
+			return nullptr;
+		},
+		true });
+
+		std::string output = preprocessor.Process();
+		REQUIRE((result && output == "\n4a\n\n__LINE__a"));
+	}
 }

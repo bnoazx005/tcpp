@@ -353,6 +353,7 @@ namespace tcpp
 			void _removeMacroDefinition(const std::string& macroName) TCPP_NOEXCEPT;
 
 			std::vector<TToken> _expandMacroDefinition(const TMacroDesc& macroDesc, const TToken& idToken, const std::function<TToken()>& getNextTokenCallback) const TCPP_NOEXCEPT;
+			std::vector<TToken> _expandArg(const std::function<TToken()>& getNextTokenCallback) const TCPP_NOEXCEPT;
 
 			void _expect(const E_TOKEN_TYPE& expectedType, const E_TOKEN_TYPE& actualType) const TCPP_NOEXCEPT;
 
@@ -384,6 +385,8 @@ namespace tcpp
 
 	///< implementation of the library is placed below
 #if defined(TCPP_IMPLEMENTATION)
+
+	static const std::string EMPTY_STR_VALUE = "";
 
 
 	std::string ErrorTypeToString(const E_ERROR_TYPE& errorType) TCPP_NOEXCEPT
@@ -418,7 +421,7 @@ namespace tcpp
 				return "Incorrect usage of stringification operation";
 		}
 
-		return "";
+		return EMPTY_STR_VALUE;
 	}
 
 
@@ -684,7 +687,7 @@ namespace tcpp
 
 		static const std::string separators = ",()[]<>\"+-*/&|!=;";
 
-		std::string currStr = "";
+		std::string currStr = EMPTY_STR_VALUE;
 
 		while (!inputLine.empty())
 		{
@@ -782,7 +785,7 @@ namespace tcpp
 						inputLine.erase(0, currDirectiveStr.length());
 						mCurrPos += currDirectiveStr.length();
 
-						return { std::get<E_TOKEN_TYPE>(currDirective), "", mCurrLineIndex, mCurrPos };
+						return { std::get<E_TOKEN_TYPE>(currDirective), EMPTY_STR_VALUE, mCurrLineIndex, mCurrPos };
 					}
 				}
 
@@ -807,11 +810,11 @@ namespace tcpp
 						case '#':	// \note concatenation operator
 							inputLine.erase(0, 1);
 							++mCurrPos;
-							return { E_TOKEN_TYPE::CONCAT_OP, "", mCurrLineIndex, mCurrPos };
+							return { E_TOKEN_TYPE::CONCAT_OP, EMPTY_STR_VALUE, mCurrLineIndex, mCurrPos };
 						default:
 							if (nextCh != ' ') // \note stringification operator
 							{
-								return { E_TOKEN_TYPE::STRINGIZE_OP, "", mCurrLineIndex, mCurrPos };
+								return { E_TOKEN_TYPE::STRINGIZE_OP, EMPTY_STR_VALUE, mCurrLineIndex, mCurrPos };
 							}
 
 							return { E_TOKEN_TYPE::BLOB, "#", mCurrLineIndex, mCurrPos };
@@ -973,7 +976,7 @@ namespace tcpp
 
 		if (!pCurrInputStream->HasNextLine())
 		{
-			return "";
+			return EMPTY_STR_VALUE;
 		}
 
 		std::string sourceLine = pCurrInputStream->ReadLine();
@@ -1557,6 +1560,11 @@ namespace tcpp
 
 		std::string replacementValue;
 
+		std::unordered_map<std::string, std::vector<TToken>> cachedArgsSequences
+		{
+			{ EMPTY_STR_VALUE, {} }
+		};
+
 		for (size_t currArgIndex = 0; currArgIndex < processingTokens.size(); ++currArgIndex)
 		{
 			const bool variadics = macroDesc.mVariadic && currArgIndex == macroDesc.mArgsNames.size() - 1;
@@ -1581,14 +1589,50 @@ namespace tcpp
 				}
 			}
 
-			for (auto& currToken : replacementList)
+			for (size_t currTokenIndex = 0; currTokenIndex < replacementList.size(); ++currTokenIndex)
 			{
+				TToken& currToken = replacementList[currTokenIndex];
+
 				if ((currToken.mType != E_TOKEN_TYPE::IDENTIFIER) || (currToken.mRawView != currArgName))
 				{
 					continue;
 				}
+				
+				// \note Check whether argument is used as an operand of token-pasting or stringification operators
+				auto nextNonSpaceToken = std::find_if(replacementList.cbegin() + currTokenIndex + 1, replacementList.cend(), [](const TToken& token) { return token.mType != E_TOKEN_TYPE::SPACE; });
+				auto prevNonSpaceToken = std::find_if(replacementList.rbegin() + (replacementList.size() - currTokenIndex), replacementList.rend(), [](const TToken& token) { return token.mType != E_TOKEN_TYPE::SPACE; });
 
-				currToken.mRawView = replacementValue;
+				const bool isTokenPastingOperand =
+					(nextNonSpaceToken != replacementList.cend() && nextNonSpaceToken->mType == E_TOKEN_TYPE::CONCAT_OP) ||
+					(prevNonSpaceToken != replacementList.rend() && prevNonSpaceToken->mType == E_TOKEN_TYPE::CONCAT_OP);
+				const bool isStringifyOperand    = currTokenIndex > 0 && replacementList[currTokenIndex - 1].mType == E_TOKEN_TYPE::STRINGIZE_OP;
+
+				if (isTokenPastingOperand || isStringifyOperand)
+				{
+					currToken.mRawView = replacementValue;
+					continue;
+				}
+
+				std::vector<TToken>& currExpandedArgTokens = cachedArgsSequences[EMPTY_STR_VALUE];
+
+				auto prevComputationIt = cachedArgsSequences.find(replacementValue);
+				if (prevComputationIt == cachedArgsSequences.cend())
+				{
+					auto it = processingTokens[currArgIndex].begin();
+					currExpandedArgTokens = _expandArg([&processingTokens, &it, currArgIndex] { if (it == processingTokens[currArgIndex].end()) return TToken{ E_TOKEN_TYPE::END }; return *it++; });
+				}
+				else
+				{
+					currExpandedArgTokens = prevComputationIt->second;
+				}
+
+				currToken = *currExpandedArgTokens.cbegin();
+
+				if (currExpandedArgTokens.size() > 1)
+				{
+					replacementList.insert(replacementList.cbegin() + currTokenIndex + 1, currExpandedArgTokens.cbegin() + 1, currExpandedArgTokens.cend());
+					currTokenIndex += currExpandedArgTokens.size() - 1;
+				}
 			}
 
 			if (variadics)
@@ -1601,9 +1645,86 @@ namespace tcpp
 		return replacementList;
 	}
 
-	/*std::vector<TToken> Preprocessor::_expandMacroArg(const TMacroDesc& macroDesc, const TToken& idToken, const std::function<TToken()>& getNextTokenCallback) const TCPP_NOEXCEPT
+	std::vector<TToken> Preprocessor::_expandArg(const std::function<TToken()>& getNextTokenCallback) const TCPP_NOEXCEPT
 	{
-	}*/
+		std::vector<TToken> outputSequence{};
+
+		TToken currToken;
+
+		while ((currToken = getNextTokenCallback()).mType != E_TOKEN_TYPE::END)
+		{
+			switch (currToken.mType)
+			{
+				case E_TOKEN_TYPE::IDENTIFIER: // \note try to expand some macro here
+					{
+						auto iter = std::find_if(mSymTable.cbegin(), mSymTable.cend(), [&currToken](auto&& item)
+							{
+								return item.mName == currToken.mRawView;
+							});
+
+						auto contextIter = std::find_if(mContextStack.cbegin(), mContextStack.cend(), [&currToken](auto&& item)
+							{
+								return item == currToken.mRawView;
+							});
+
+						if (iter != mSymTable.cend() && contextIter == mContextStack.cend())
+						{
+							auto expandedMacroTokens = _expandMacroDefinition(*iter, currToken, getNextTokenCallback);
+							outputSequence.insert(outputSequence.cbegin(), expandedMacroTokens.cbegin(), expandedMacroTokens.cend());
+						}
+						else
+						{
+							outputSequence.emplace_back(currToken);
+						}
+					}
+					break;
+				case E_TOKEN_TYPE::REJECT_MACRO:
+					mContextStack.erase(std::remove_if(mContextStack.begin(), mContextStack.end(), [&currToken](auto&& item)
+						{
+							return item == currToken.mRawView;
+						}), mContextStack.end());
+					break;
+				case E_TOKEN_TYPE::CONCAT_OP:
+#if 0
+					while (processedStr.back() == ' ') // \note Remove last character in the processed source if it was a whitespace
+					{
+						processedStr.erase(processedStr.length() - 1);
+					}
+
+					currToken = TrySkipWhitespaceTokensSequence(getNextTokenCallback(), getNextTokenCallback());
+					appendString(currToken.mRawView);
+#endif
+					break;
+				case E_TOKEN_TYPE::STRINGIZE_OP:
+					{
+						if (mContextStack.empty())
+						{
+							mOnErrorCallback({ E_ERROR_TYPE::INCORRECT_OPERATION_USAGE, mpLexer->GetCurrLineIndex() });
+							continue;
+						}
+
+						TToken stringLiteralToken = currToken;
+						stringLiteralToken.mType    = E_TOKEN_TYPE::BLOB;
+						stringLiteralToken.mRawView = "\"" + (currToken = mpLexer->GetNextToken()).mRawView + "\"";
+
+						outputSequence.emplace_back(stringLiteralToken);
+					}
+					break;
+				default:
+					if (E_TOKEN_TYPE::COMMENTARY == currToken.mType && mSkipCommentsTokens)
+					{
+						break;
+					}
+
+					outputSequence.emplace_back(currToken);
+					break;
+			}
+		}
+
+		TCPP_ASSERT(!outputSequence.empty());
+
+		return outputSequence;
+	}
 
 	void Preprocessor::_expect(const E_TOKEN_TYPE& expectedType, const E_TOKEN_TYPE& actualType) const TCPP_NOEXCEPT
 	{
