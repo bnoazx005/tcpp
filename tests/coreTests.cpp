@@ -41,7 +41,7 @@ TEST_CASE("Preprocessor Tests")
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
 		Preprocessor preprocessor(lexer, { errorCallback });
-		std::cout << preprocessor.Process() << std::endl;
+		preprocessor.Process();
 	}
 
 	SECTION("TestProcess_PassSourceWithSimpleMacroWithoutValue_ReturnsSourceWithExpandedMacro")
@@ -59,7 +59,7 @@ TEST_CASE("Preprocessor Tests")
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
 		Preprocessor preprocessor(lexer, { errorCallback });
-		std::cout << preprocessor.Process() << std::endl;
+		preprocessor.Process();
 	}
 
 	SECTION("TestProcess_PassSourceWithIncludeDirective_ReturnsSourceStringWithIncludeDirective")
@@ -353,7 +353,7 @@ TEST_CASE("Preprocessor Tests")
 			result = false;
 		} });
 
-		std::cout << preprocessor.Process() << std::endl;
+		preprocessor.Process();
 		REQUIRE(result);
 	}
 
@@ -371,7 +371,6 @@ TEST_CASE("Preprocessor Tests")
 		} });
 
 		auto&& output = preprocessor.Process();
-		std::cout << output << std::endl;
 		REQUIRE(output == inputSource);
 	}
 
@@ -389,7 +388,6 @@ TEST_CASE("Preprocessor Tests")
 		} });
 
 		auto&& output = preprocessor.Process();
-		std::cout << output << std::endl;
 		REQUIRE(output == inputSource);
 	}
 
@@ -407,8 +405,6 @@ TEST_CASE("Preprocessor Tests")
 		} });
 
 		std::string str = preprocessor.Process();
-		std::cout << str << std::endl;
-
 		REQUIRE((result && (str == "AAABB")));
 	}
 
@@ -446,8 +442,6 @@ TEST_CASE("Preprocessor Tests")
 		} });
 
 		std::string actualResult = preprocessor.Process();
-		std::cout << actualResult << std::endl;
-
 		REQUIRE((result && (actualResult == expectedResult)));
 	}
 
@@ -474,8 +468,6 @@ TEST_CASE("Preprocessor Tests")
 		} });
 
 		std::string actualResult = preprocessor.Process();
-		std::cout << actualResult << std::endl;
-
 		REQUIRE((result && (actualResult == expectedResult)));
 	}
 
@@ -524,7 +516,7 @@ TEST_CASE("Preprocessor Tests")
             std::cout << "Error" << ErrorTypeToString(err.mType) << "\n";
         } });
 
-        std::cout << preprocessor.Process() << "\n";
+		preprocessor.Process();
 	}
 
 	SECTION("TestProcess_VA_ARGS_MultiExpand")
@@ -546,7 +538,7 @@ int main()
             std::cout << "Error" << ErrorTypeToString(err.mType) << "\n";
         } });
 
-        std::cout << preprocessor.Process() << "\n";
+		preprocessor.Process();
 	}
 
     SECTION("TestProcess_PassDefineThatSeparatedWithSpaces_ReturnsCorrectProcessedSource")
@@ -946,8 +938,6 @@ TEST(3)
 
 		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
 		{
-			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
-
 			REQUIRE(arg.mType == E_ERROR_TYPE::INCORRECT_STRINGIFY_OPERATOR_USAGE);
 			result = false;
 		}, [](auto&&, auto&&)
@@ -998,7 +988,7 @@ TEST()
 
 		Preprocessor preprocessor(lexer, { [&result](auto&& arg)
 		{
-			std::cerr << "Error: " << ErrorTypeToString(arg.mType) << std::endl;
+			REQUIRE(arg.mType == E_ERROR_TYPE::INCONSISTENT_MACRO_ARITY);
 			result = false;
 		}, [](auto&&, auto&&)
 		{
