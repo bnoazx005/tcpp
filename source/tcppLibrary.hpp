@@ -193,7 +193,7 @@ namespace tcpp
 			using TDirectiveHandlersArray = std::unordered_set<std::string>;
 		public:
 			Lexer() TCPP_NOEXCEPT = delete;
-			explicit Lexer(TInputStreamUniquePtr pIinputStream) TCPP_NOEXCEPT;
+			explicit Lexer(TInputStreamUniquePtr pInputStream) TCPP_NOEXCEPT;
 			~Lexer() TCPP_NOEXCEPT = default;
 
 			bool AddCustomDirective(const std::string& directive) TCPP_NOEXCEPT; 
@@ -471,7 +471,7 @@ namespace tcpp
 
 	const TToken Lexer::mEOFToken = { E_TOKEN_TYPE::END };
 
-	Lexer::Lexer(TInputStreamUniquePtr pIinputStream) TCPP_NOEXCEPT:
+	Lexer::Lexer(TInputStreamUniquePtr pInputStream) TCPP_NOEXCEPT:
 		mDirectivesTable
 		{
 			{ "define", E_TOKEN_TYPE::DEFINE },
@@ -486,7 +486,7 @@ namespace tcpp
 			{ "defined", E_TOKEN_TYPE::DEFINED },
 		}, mCurrLine(), mCurrLineIndex(0)
 	{
-		PushStream(std::move(pIinputStream));
+		PushStream(std::move(pInputStream));
 	}
 
 	bool Lexer::AddCustomDirective(const std::string& directive) TCPP_NOEXCEPT
