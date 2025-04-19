@@ -178,6 +178,9 @@ namespace tcpp
 	} TToken, *TTokenPtr;
 
 
+	using TTokensSequence = std::vector<TToken>;
+
+
 	/*!
 		class Lexer
 
@@ -210,7 +213,7 @@ namespace tcpp
 
 			bool HasNextToken() const TCPP_NOEXCEPT;
 
-			void AppendFront(const std::vector<TToken>& tokens) TCPP_NOEXCEPT;
+			void AppendFront(const TTokensSequence& tokens) TCPP_NOEXCEPT;
 
 			void PushStream(TInputStreamUniquePtr stream) TCPP_NOEXCEPT;
 			void PopStream() TCPP_NOEXCEPT;
@@ -255,7 +258,7 @@ namespace tcpp
 	{
 		std::string mName;
 		std::vector<std::string> mArgsNames;
-		std::vector<TToken> mValue;
+		TTokensSequence mValue;
 		bool mVariadic = false;
 	} TMacroDesc, *TMacroDescPtr;
 
@@ -352,8 +355,8 @@ namespace tcpp
 			void _createMacroDefinition() TCPP_NOEXCEPT;
 			void _removeMacroDefinition(const std::string& macroName) TCPP_NOEXCEPT;
 
-			std::vector<TToken> _expandMacroDefinition(const TMacroDesc& macroDesc, const TToken& idToken, const std::function<TToken()>& getNextTokenCallback) const TCPP_NOEXCEPT;
-			std::vector<TToken> _expandArg(const std::function<TToken()>& getNextTokenCallback) const TCPP_NOEXCEPT;
+			TTokensSequence _expandMacroDefinition(const TMacroDesc& macroDesc, const TToken& idToken, const std::function<TToken()>& getNextTokenCallback) const TCPP_NOEXCEPT;
+			TTokensSequence _expandArg(const std::function<TToken()>& getNextTokenCallback) const TCPP_NOEXCEPT;
 
 			void _expect(const E_TOKEN_TYPE& expectedType, const E_TOKEN_TYPE& actualType) const TCPP_NOEXCEPT;
 
@@ -365,7 +368,7 @@ namespace tcpp
 			void _processElseConditional(TIfStackEntry& currStackEntry) TCPP_NOEXCEPT;
 			void _processElifConditional(TIfStackEntry& currStackEntry) TCPP_NOEXCEPT;
 
-			int _evaluateExpression(const std::vector<TToken>& exprTokens) const TCPP_NOEXCEPT;
+			int _evaluateExpression(const TTokensSequence& exprTokens) const TCPP_NOEXCEPT;
 
 			bool _shouldTokenBeSkipped() const TCPP_NOEXCEPT;
 		private:
@@ -532,7 +535,7 @@ namespace tcpp
 		return (pCurrInputStream ? pCurrInputStream->HasNextLine() : false) || !mCurrLine.empty() || !mTokensQueue.empty();
 	}
 
-	void Lexer::AppendFront(const std::vector<TToken>& tokens) TCPP_NOEXCEPT
+	void Lexer::AppendFront(const TTokensSequence& tokens) TCPP_NOEXCEPT
 	{
 		mTokensQueue.insert(mTokensQueue.begin(), tokens.begin(), tokens.end());
 	}
@@ -1435,7 +1438,7 @@ namespace tcpp
 		_expect(E_TOKEN_TYPE::NEWLINE, currToken.mType);
 	}
 
-	std::vector<TToken> Preprocessor::_expandMacroDefinition(const TMacroDesc& macroDesc, const TToken& idToken, const std::function<TToken()>& getNextTokenCallback) const TCPP_NOEXCEPT
+	TTokensSequence Preprocessor::_expandMacroDefinition(const TMacroDesc& macroDesc, const TToken& idToken, const std::function<TToken()>& getNextTokenCallback) const TCPP_NOEXCEPT
 	{
 		// \note expand object like macro with simple replacement
 		if (macroDesc.mArgsNames.empty())
@@ -1472,8 +1475,8 @@ namespace tcpp
 
 		_expect(E_TOKEN_TYPE::OPEN_BRACKET, currToken.mType);
 
-		std::vector<std::vector<TToken>> processingTokens;
-		std::vector<TToken> currArgTokens;
+		std::vector<TTokensSequence> processingTokens;
+		TTokensSequence currArgTokens;
 
 		uint8_t currNestingLevel = 0;
 
@@ -1555,12 +1558,12 @@ namespace tcpp
 		}
 
 		// \note execute macro's expansion
-		std::vector<TToken> replacementList{ macroDesc.mValue.cbegin(), macroDesc.mValue.cend() };
+		TTokensSequence replacementList{ macroDesc.mValue.cbegin(), macroDesc.mValue.cend() };
 		const auto& argsList = macroDesc.mArgsNames;
 
 		std::string replacementValue;
 
-		std::unordered_map<std::string, std::vector<TToken>> cachedArgsSequences
+		std::unordered_map<std::string, TTokensSequence> cachedArgsSequences
 		{
 			{ EMPTY_STR_VALUE, {} }
 		};
@@ -1613,7 +1616,7 @@ namespace tcpp
 					continue;
 				}
 
-				std::vector<TToken>& currExpandedArgTokens = cachedArgsSequences[EMPTY_STR_VALUE];
+				TTokensSequence& currExpandedArgTokens = cachedArgsSequences[EMPTY_STR_VALUE];
 
 				auto prevComputationIt = cachedArgsSequences.find(replacementValue);
 				if (prevComputationIt == cachedArgsSequences.cend())
@@ -1645,9 +1648,9 @@ namespace tcpp
 		return replacementList;
 	}
 
-	std::vector<TToken> Preprocessor::_expandArg(const std::function<TToken()>& getNextTokenCallback) const TCPP_NOEXCEPT
+	TTokensSequence Preprocessor::_expandArg(const std::function<TToken()>& getNextTokenCallback) const TCPP_NOEXCEPT
 	{
-		std::vector<TToken> outputSequence{};
+		TTokensSequence outputSequence{};
 
 		TToken currToken;
 
@@ -1792,7 +1795,7 @@ namespace tcpp
 		auto currToken = mpLexer->GetNextToken();
 		_expect(E_TOKEN_TYPE::SPACE, currToken.mType);
 
-		std::vector<TToken> expressionTokens;
+		TTokensSequence expressionTokens;
 
 		while ((currToken = mpLexer->GetNextToken()).mType != E_TOKEN_TYPE::NEWLINE)
 		{
@@ -1887,7 +1890,7 @@ namespace tcpp
 		auto currToken = mpLexer->GetNextToken();
 		_expect(E_TOKEN_TYPE::SPACE, currToken.mType);
 
-		std::vector<TToken> expressionTokens;
+		TTokensSequence expressionTokens;
 
 		while ((currToken = mpLexer->GetNextToken()).mType != E_TOKEN_TYPE::NEWLINE)
 		{
@@ -1903,9 +1906,9 @@ namespace tcpp
 		if (!currStackEntry.mShouldBeSkipped) currStackEntry.mHasIfBlockBeenEntered = true;
 	}
 
-	int Preprocessor::_evaluateExpression(const std::vector<TToken>& exprTokens) const TCPP_NOEXCEPT
+	int Preprocessor::_evaluateExpression(const TTokensSequence& exprTokens) const TCPP_NOEXCEPT
 	{
-		std::vector<TToken> tokens{ exprTokens.begin(), exprTokens.end() };
+		TTokensSequence tokens{ exprTokens.begin(), exprTokens.end() };
 		tokens.push_back({ E_TOKEN_TYPE::END });
 
 		auto evalPrimary = [this, &tokens]()
