@@ -312,7 +312,7 @@ namespace tcpp
 			using TOnIncludeCallback = std::function<TInputStreamUniquePtr(const std::string&, bool)>;
 			using TSymTable = std::vector<TMacroDesc>;
 			using TContextStack = std::list<std::string>;
-			using TDirectiveHandler = std::function<std::string(Preprocessor&, Lexer&, const std::string&)>;
+			using TDirectiveHandler = std::function<TToken(Preprocessor&, Lexer&)>;
 			using TDirectivesMap = std::unordered_map<std::string, TDirectiveHandler>;
 
 			typedef struct TPreprocessorConfigInfo
@@ -346,7 +346,8 @@ namespace tcpp
 
 			bool AddCustomDirectiveHandler(const std::string& directive, const TDirectiveHandler& handler) TCPP_NOEXCEPT;
 
-			std::string Process() TCPP_NOEXCEPT;
+			TTokensSequence Process() TCPP_NOEXCEPT;
+			static std::string ToString(const TTokensSequence& tokens) TCPP_NOEXCEPT;
 
 			Preprocessor& operator= (const Preprocessor&) TCPP_NOEXCEPT = delete;
 
@@ -1150,20 +1151,20 @@ namespace tcpp
 	}
 
 
-	std::string Preprocessor::Process() TCPP_NOEXCEPT
+	TTokensSequence Preprocessor::Process() TCPP_NOEXCEPT
 	{
 		TCPP_ASSERT(mpLexer);
 
-		std::string processedStr;
+		TTokensSequence processedTokens{};
 
-		auto appendString = [&processedStr, this](const std::string& str)
+		auto appendToken = [&processedTokens, this](const TToken& token)
 		{
 			if (_shouldTokenBeSkipped())
 			{
 				return;
 			}
 
-			processedStr.append(str);
+			processedTokens.emplace_back(token);
 		};
 
 		// \note first stage of preprocessing, expand macros and include directives
@@ -1231,7 +1232,7 @@ namespace tcpp
 						}
 						else
 						{
-							appendString(currToken.mRawView);
+							appendToken(currToken);
 						}
 					}
 					break;
@@ -1242,13 +1243,18 @@ namespace tcpp
 					}), mContextStack.end());
 					break;
 				case E_TOKEN_TYPE::CONCAT_OP:
-					while (processedStr.back() == ' ') // \note Remove last character in the processed source if it was a whitespace
+					while (processedTokens.back().mType == E_TOKEN_TYPE::SPACE)
 					{
-						processedStr.erase(processedStr.length() - 1);
+						processedTokens.erase(processedTokens.end() - 1);
 					}
 
 					currToken = TrySkipWhitespaceTokensSequence([this] { return mpLexer->GetNextToken(); }, mpLexer->GetNextToken());
-					appendString(currToken.mRawView);
+
+					if (!_shouldTokenBeSkipped())
+					{
+						processedTokens.back().mRawView += currToken.mRawView;
+					}
+
 					break;
 				case E_TOKEN_TYPE::STRINGIZE_OP:
 					{
@@ -1258,7 +1264,9 @@ namespace tcpp
 							continue;
 						}
 
-						appendString("\"" + (currToken = mpLexer->GetNextToken()).mRawView + "\"");
+						appendToken(TToken{ E_TOKEN_TYPE::QUOTES, "\"" });
+						appendToken((currToken = mpLexer->GetNextToken()));
+						appendToken(TToken{ E_TOKEN_TYPE::QUOTES, "\"" });
 					}
 					break;
 				case E_TOKEN_TYPE::CUSTOM_DIRECTIVE:
@@ -1266,7 +1274,7 @@ namespace tcpp
 						auto customDirectiveIter = mCustomDirectivesHandlersMap.find(currToken.mRawView);
 						if (customDirectiveIter != mCustomDirectivesHandlersMap.cend())
 						{
-							appendString(customDirectiveIter->second(*this, *mpLexer, processedStr));
+							appendToken(customDirectiveIter->second(*this, *mpLexer));
 						}
 						else
 						{
@@ -1280,7 +1288,7 @@ namespace tcpp
 						break;
 					}
 
-					appendString(currToken.mRawView);
+					appendToken(currToken);
 					break;
 			}
 
@@ -1290,7 +1298,19 @@ namespace tcpp
 			}
 		}
 
-		return processedStr;
+		return processedTokens;
+	}
+
+	std::string Preprocessor::ToString(const TTokensSequence& tokens) TCPP_NOEXCEPT
+	{
+		std::string output = EMPTY_STR_VALUE;
+		
+		for (const TToken& currToken : tokens)
+		{
+			output.append(currToken.mRawView);
+		}
+		
+		return output;
 	}
 	
 	Preprocessor::TSymTable Preprocessor::GetSymbolsTable() const TCPP_NOEXCEPT
@@ -1695,7 +1715,7 @@ namespace tcpp
 					}
 
 					currToken = TrySkipWhitespaceTokensSequence(getNextTokenCallback(), getNextTokenCallback());
-					appendString(currToken.mRawView);
+					appendToken(currToken.mRawView);
 #endif
 					break;
 				case E_TOKEN_TYPE::STRINGIZE_OP:

@@ -50,7 +50,7 @@ TEST_CASE("Preprocessor Tests")
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
 		Preprocessor preprocessor(lexer, { errorCallback });
-		REQUIRE(preprocessor.Process() == "1");
+		REQUIRE(Preprocessor::ToString(preprocessor.Process()) == "1");
 	}
 
 	SECTION("TestProcess_PassSourceWithCorrectFuncMacro_ReturnsSourceWithExpandedMacro")
@@ -88,7 +88,7 @@ TEST_CASE("Preprocessor Tests")
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
 		Preprocessor preprocessor(lexer, { errorCallback });
-		REQUIRE(preprocessor.Process() == "1\n2\n3");
+		REQUIRE(Preprocessor::ToString(preprocessor.Process()) == "1\n2\n3");
 	}
 
 	SECTION("TestProcess_PassSourceWithStringizeOperator_ReturnsSourceWithStringifiedToken")
@@ -97,7 +97,7 @@ TEST_CASE("Preprocessor Tests")
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
 		Preprocessor preprocessor(lexer, { errorCallback });
-		REQUIRE(preprocessor.Process() == " \"Text\"");
+		REQUIRE(Preprocessor::ToString(preprocessor.Process()) == " \"Text\"");
 	}
 
 	/*SECTION("TestProcess_PassSourceWithConcatenationOperator_ReturnsSourceWithConcatenatedTokens")
@@ -116,7 +116,7 @@ TEST_CASE("Preprocessor Tests")
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
 		Preprocessor preprocessor(lexer, { errorCallback });
-		REQUIRE(preprocessor.Process() == "\n two three");
+		REQUIRE(Preprocessor::ToString(preprocessor.Process()) == "\n two three");
 	}
 
 	SECTION("TestProcess_PassSourceWithConditionalBlocks_ReturnsSourceWithoutIfBlock")
@@ -125,7 +125,7 @@ TEST_CASE("Preprocessor Tests")
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
 		Preprocessor preprocessor(lexer, { errorCallback });
-		REQUIRE(preprocessor.Process() == "\n else block ");
+		REQUIRE(Preprocessor::ToString(preprocessor.Process()) == "\n else block ");
 	}
 	
 	SECTION("TestProcess_PassSourceWithConditionalBlocks_ReturnsSourceWithoutElseBlock")
@@ -134,7 +134,7 @@ TEST_CASE("Preprocessor Tests")
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
 		Preprocessor preprocessor(lexer, { errorCallback });
-		REQUIRE(preprocessor.Process() == " if block\n");
+		REQUIRE(Preprocessor::ToString(preprocessor.Process()) == " if block\n");
 	}
 
 	SECTION("TestProcess_PassSourceWithElifBlocks_ReturnsSourceWithElabledElifBlock")
@@ -143,7 +143,7 @@ TEST_CASE("Preprocessor Tests")
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
 		Preprocessor preprocessor(lexer, { errorCallback });
-		REQUIRE(preprocessor.Process() == "two\n");
+		REQUIRE(Preprocessor::ToString(preprocessor.Process()) == "two\n");
 	}
 
 	SECTION("TestProcess_PassSourceWithFewElifBlocks_ReturnsSourceWithElabledElifBlock")
@@ -152,7 +152,7 @@ TEST_CASE("Preprocessor Tests")
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
 		Preprocessor preprocessor(lexer, { errorCallback });
-		REQUIRE(preprocessor.Process() == "three\n");
+		REQUIRE(Preprocessor::ToString(preprocessor.Process()) == "three\n");
 	}
 
 	SECTION("TestProcess_PassSourceWithInvalidElseBlock_ReturnsError")
@@ -177,7 +177,7 @@ TEST_CASE("Preprocessor Tests")
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
 		Preprocessor preprocessor(lexer, { errorCallback });
-		REQUIRE(preprocessor.Process() == "one\n\nfour\n");
+		REQUIRE(Preprocessor::ToString(preprocessor.Process()) == "one\n\nfour\n");
 	}
 
 	SECTION("TestProcess_PassSourceWithIfdefBlock_CorrectlyProcessesIfdefBlock")
@@ -186,7 +186,7 @@ TEST_CASE("Preprocessor Tests")
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
 		Preprocessor preprocessor(lexer, { errorCallback });
-		REQUIRE(preprocessor.Process() == "\ntwo");
+		REQUIRE(Preprocessor::ToString(preprocessor.Process()) == "\ntwo");
 	}
 
 	SECTION("TestProcess_PassSourceWithIfndefBlock_CorrectlyProcessesIfndefBlock")
@@ -195,7 +195,7 @@ TEST_CASE("Preprocessor Tests")
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
 		Preprocessor preprocessor(lexer, { errorCallback });
-		REQUIRE(preprocessor.Process() == "one\n\ntwo");
+		REQUIRE(Preprocessor::ToString(preprocessor.Process()) == "one\n\ntwo");
 	}
 
 	SECTION("TestProcess_PassNestedActiveIfdefBlockInsideOfAnotherInactiveIfdefBlock_TopBlockShouldBeRejected")
@@ -213,7 +213,7 @@ TEST_CASE("Preprocessor Tests")
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
 		Preprocessor preprocessor(lexer, { errorCallback });
-		std::string output = preprocessor.Process();
+		std::string output = Preprocessor::ToString(preprocessor.Process());
 		REQUIRE((output.find("condition_1") == std::string::npos && output.find("condition_0") == std::string::npos));
 	}
 
@@ -232,7 +232,7 @@ TEST_CASE("Preprocessor Tests")
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
 		Preprocessor preprocessor(lexer, { errorCallback });
-		std::string output = preprocessor.Process();
+		std::string output = Preprocessor::ToString(preprocessor.Process());
 		REQUIRE((
 			output.find("condition_1") == std::string::npos &&
 			output.find("condition_0") == std::string::npos &&
@@ -256,7 +256,7 @@ TEST_CASE("Preprocessor Tests")
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
 		Preprocessor preprocessor(lexer, { errorCallback });
-		std::string output = preprocessor.Process();
+		std::string output = Preprocessor::ToString(preprocessor.Process());
 		REQUIRE((
 			output.find("condition_1") == std::string::npos &&
 			output.find("condition_0") == std::string::npos &&
@@ -269,7 +269,7 @@ TEST_CASE("Preprocessor Tests")
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
 		Preprocessor preprocessor(lexer, { errorCallback });
-		REQUIRE(preprocessor.Process() == "one\n");
+		REQUIRE(Preprocessor::ToString(preprocessor.Process()) == "one\n");
 	}
 
 	SECTION("TestProcess_PassSourceWithIncludeDirective_ReturnsProcessedSource")
@@ -289,7 +289,7 @@ TEST_CASE("Preprocessor Tests")
 			return std::make_unique<StringInputStream>(systemInput);
 		} });
 
-		REQUIRE((result && (preprocessor.Process() == "one\ntwo")));
+		REQUIRE((result && (Preprocessor::ToString(preprocessor.Process()) == "one\ntwo")));
 	}
 
 	SECTION("TestProcess_PassSourceWithIncludeGuards_ReturnsProcessedSource")
@@ -336,7 +336,7 @@ TEST_CASE("Preprocessor Tests")
 			return std::make_unique<StringInputStream>(systemSource);
 		} });
 
-		std::string output = preprocessor.Process();
+		std::string output = Preprocessor::ToString(preprocessor.Process());
 		REQUIRE(result);
 	}
 
@@ -370,7 +370,7 @@ TEST_CASE("Preprocessor Tests")
 			result = false;
 		} });
 
-		auto&& output = preprocessor.Process();
+		auto&& output = Preprocessor::ToString(preprocessor.Process());
 		REQUIRE(output == inputSource);
 	}
 
@@ -387,7 +387,7 @@ TEST_CASE("Preprocessor Tests")
 			result = false;
 		} });
 
-		auto&& output = preprocessor.Process();
+		auto&& output = Preprocessor::ToString(preprocessor.Process());
 		REQUIRE(output == inputSource);
 	}
 
@@ -404,7 +404,7 @@ TEST_CASE("Preprocessor Tests")
 			result = false;
 		} });
 
-		std::string str = preprocessor.Process();
+		std::string str = Preprocessor::ToString(preprocessor.Process());
 		REQUIRE((result && (str == "AAABB")));
 	}
 
@@ -423,7 +423,7 @@ TEST_CASE("Preprocessor Tests")
 			result = false;
 		} });
 
-		REQUIRE((result && (preprocessor.Process() == expectedResult)));
+		REQUIRE((result && (Preprocessor::ToString(preprocessor.Process()) == expectedResult)));
 	}
 
 	SECTION("TestProcess_PassNestedFunctionMacroIntoAnotherFunctionMacro_ReturnsProcessedSource")
@@ -441,7 +441,7 @@ TEST_CASE("Preprocessor Tests")
 			result = false;
 		} });
 
-		std::string actualResult = preprocessor.Process();
+		std::string actualResult = Preprocessor::ToString(preprocessor.Process());
 		REQUIRE((result && (actualResult == expectedResult)));
 	}
 
@@ -467,7 +467,7 @@ TEST_CASE("Preprocessor Tests")
 			result = false;
 		} });
 
-		std::string actualResult = preprocessor.Process();
+		std::string actualResult = Preprocessor::ToString(preprocessor.Process());
 		REQUIRE((result && (actualResult == expectedResult)));
 	}
 
@@ -501,7 +501,7 @@ TEST_CASE("Preprocessor Tests")
 			result = false;
 		} });
 
-		std::string actualResult = preprocessor.Process();
+		std::string actualResult = Preprocessor::ToString(preprocessor.Process());
 		REQUIRE((result && (actualResult == expectedResult)));
 	}
 
@@ -555,7 +555,7 @@ int main()
 			result = false;
 		} });
 
-		std::string str = preprocessor.Process();
+		std::string str = Preprocessor::ToString(preprocessor.Process());
 
 		/// \note symbol table should contain Foo macro
 		REQUIRE(ContainsMacro(preprocessor, "Foo"));
@@ -577,7 +577,7 @@ int main()
 			result = false;
 		} });
 
-		std::string str = preprocessor.Process();
+		std::string str = Preprocessor::ToString(preprocessor.Process());
 
 		REQUIRE((result && str == expectedResult));
 	}
@@ -648,7 +648,7 @@ int main()
 			result = false;
 		} });
 
-		std::string str = preprocessor.Process();
+		std::string str = Preprocessor::ToString(preprocessor.Process());
 
 		REQUIRE(!ContainsMacro(preprocessor, "PASSED_0"));
 		REQUIRE(ContainsMacro(preprocessor, "FAILED_0"));
@@ -706,7 +706,7 @@ int main()
 			result = false;
 		} });
 
-		std::string str = preprocessor.Process();
+		std::string str = Preprocessor::ToString(preprocessor.Process());
 
 		REQUIRE(!ContainsMacro(preprocessor, "PASSED"));
 		REQUIRE(ContainsMacro(preprocessor, "FAILED"));
@@ -731,7 +731,7 @@ int main()
 			result = false;
 		} });
 
-		std::string str = preprocessor.Process();
+		std::string str = Preprocessor::ToString(preprocessor.Process());
 	}
 
 	SECTION("TestProcess_PassSourceDangerousCommentary_CorrectlyProcessThatCommentary")
@@ -761,7 +761,7 @@ int main()
 			return nullptr;
 		} });
 
-		std::string output = preprocessor.Process();
+		std::string output = Preprocessor::ToString(preprocessor.Process());
 
 		REQUIRE((!output.empty() && output.find("#endif") == std::string::npos));
 	}
@@ -789,7 +789,7 @@ int main(int argc, char** argv) {
 		}, 
 		true });
 
-		std::string output = preprocessor.Process();
+		std::string output = Preprocessor::ToString(preprocessor.Process());
 
 		REQUIRE((!output.empty() && output.find("COMMENT") == std::string::npos));
 	}
@@ -816,7 +816,7 @@ STRCAT(a, __LINE__)
 		},
 		true });
 
-		std::string output = preprocessor.Process();
+		std::string output = Preprocessor::ToString(preprocessor.Process());
 
 		REQUIRE(output == "\n__LINE__b\na__LINE__\n"); // If an argument is stringized or concatenated, the prescan does not occur and macro is not expanded
 	}
@@ -843,7 +843,7 @@ STRCAT1(__LINE__, b)
 		},
 		true });
 
-		std::string output = preprocessor.Process();
+		std::string output = Preprocessor::ToString(preprocessor.Process())();
 
 		REQUIRE(output == "\n__LINE__3\n"); // If an argument is stringized or concatenated, the prescan does not occur and macro is not expanded
 	}
@@ -869,7 +869,7 @@ FOO
 		},
 		true });
 
-		std::string output = preprocessor.Process();
+		std::string output = Preprocessor::ToString(preprocessor.Process());
 
 		REQUIRE(output == "\n1 + FOO\n"); 
 	}
@@ -895,7 +895,7 @@ auto foo = FOO;
 		},
 		true });
 
-		std::string output = preprocessor.Process();
+		std::string output = Preprocessor::ToString(preprocessor.Process());
 
 		REQUIRE(output == "\nauto foo = FOO;\n");
 	}
@@ -921,7 +921,7 @@ FIRST((1, 2) c, 3)
 		},
 		true });
 
-		std::string output = preprocessor.Process();
+		std::string output = Preprocessor::ToString(preprocessor.Process());
 		REQUIRE((result && output == "\n(1, 2) c\n"));
 	}
 
@@ -946,7 +946,7 @@ TEST(3)
 		},
 		true });
 
-		const std::string& output = preprocessor.Process();
+		const std::string& output = Preprocessor::ToString(preprocessor.Process());
 		REQUIRE(!result);
 	}
 
@@ -1018,7 +1018,7 @@ TEST()
 		},
 		true });
 
-		std::string output = preprocessor.Process();
+		std::string output = Preprocessor::ToString(preprocessor.Process());
 		REQUIRE((result && output == "int array[4];\n"));
 	}
 
@@ -1048,7 +1048,7 @@ meow)";
 		},
 		true });
 
-		std::string output = preprocessor.Process();
+		std::string output = Preprocessor::ToString(preprocessor.Process());
 		REQUIRE((result && output == "\n4a\n\n__LINE__a"));
 	}
 }
