@@ -83,7 +83,7 @@ TEST_CASE("Lexer Tests")
 
 	SECTION("TestGetNextToken_PassStreamWithSeparators_ReturnsTheirTokens")
 	{
-		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { ",()<>\"&|+-*/&&||<<>>!<=>===!=" }));
+		Lexer lexer(std::make_unique<MockInputStream>(std::vector<std::string> { ",()<>\"&|+-*/&&||<<>>!<=>===!={}" }));
 
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::COMMA);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::OPEN_BRACKET);
@@ -106,6 +106,8 @@ TEST_CASE("Lexer Tests")
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::GE);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::EQ);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::NE);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::OPEN_BRACE);
+		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::CLOSE_BRACE);
 		REQUIRE(lexer.GetNextToken().mType == E_TOKEN_TYPE::END);
 	}
 
