@@ -32,7 +32,7 @@ TEST_CASE("Preprocessor Tests")
 		Lexer lexer(std::make_unique<StringInputStream>(inputSource));
 
 		Preprocessor preprocessor(lexer, { errorCallback });
-		REQUIRE(!preprocessor.Process().empty());
+		REQUIRE(!Preprocessor::ToString(preprocessor.Process()).empty());
 	}
 
 	SECTION("TestProcess_PassSourceWithSimpleMacro_ReturnsSourceWithExpandedMacro")

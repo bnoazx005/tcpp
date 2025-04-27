@@ -22,11 +22,26 @@
 	not be applied to this library, at least for now. There is a list of unimplemented features placed
 	below
 
+	##Configuration
+
+	There are list of available options presented below. To enable some option just use #define directive before inclusion library's header file.
+	Do not forget to provide this definitions in header files to provide access to specific types in case you need to use them.
+
+	\code
+		#define TCPP_SOME_EXAMPLE_CONFIG
+		//... other configs
+		#define TCPP_IMPLEMENTATION
+		#include "tcppLibrary.hpp
+	\endcode
+
+	* TCPP_OUTPUT_TOKENS_EXTENSION_ENABLED: The config determines which approach is used to provide processed output for a user.
+	Originally Preprocessor::Process returns output data as a std::string's instance. **TokensOutputStream** is returned with Preprocessor::Process
+	in case of TCPP_OUTPUT_TOKENS_EXTENSION_ENABLED is defined
+
 	\todo Implement support of char literals
 	\todo Improve existing performance for massive input files
 	\todo Add support of integral literals like L, u, etc
 	\todo Implement built-in directives like #pragma, #error and others
-	\todo Provide support of variadic macros
 */
 
 #pragma once
@@ -180,8 +195,36 @@ namespace tcpp
 	} TToken, *TTokenPtr;
 
 
-	using TTokensSequence = std::vector<TToken>;
+	using TTokensSequence          = std::vector<TToken>;
+	using TTokensSequenceIter      = TTokensSequence::iterator;
+	using TTokensSequenceConstIter = TTokensSequence::const_iterator;
 
+
+#ifdef TCPP_OUTPUT_TOKENS_EXTENSION_ENABLED
+	
+	class TokensOutputStream
+	{
+		public:
+			explicit TokensOutputStream(TTokensSequence tokens) TCPP_NOEXCEPT;
+
+			// Methods to provide support of iterating over the sequence using for loop
+			TTokensSequenceIter begin() TCPP_NOEXCEPT;
+			TTokensSequenceIter end() TCPP_NOEXCEPT;
+			TTokensSequenceConstIter begin() const TCPP_NOEXCEPT;
+			TTokensSequenceConstIter end() const TCPP_NOEXCEPT;
+			
+			const TToken& GetNextToken() TCPP_NOEXCEPT;
+			const TToken& PeekNextToken(size_t offset = 1) TCPP_NOEXCEPT;
+			bool HasNextToken() const TCPP_NOEXCEPT;
+		
+			const TTokensSequence& GetSequence() const TCPP_NOEXCEPT;
+		private:
+			TTokensSequence mTokens{};
+		private:
+			TTokensSequenceIter mCurrIt{};
+	};
+
+#endif
 
 	/*!
 		class Lexer
@@ -340,6 +383,14 @@ namespace tcpp
 			} TIfStackEntry, *TIfStackEntryPtr;
 
 			using TIfStack = std::stack<TIfStackEntry>;
+
+			using TPreprocessResult = 
+#ifdef TCPP_OUTPUT_TOKENS_EXTENSION_ENABLED
+			TokensOutputStream;
+#else
+			TTokensSequence;
+#endif
+
 		public:
 			Preprocessor() TCPP_NOEXCEPT = delete;
 			Preprocessor(const Preprocessor&) TCPP_NOEXCEPT = delete;
@@ -348,8 +399,8 @@ namespace tcpp
 
 			bool AddCustomDirectiveHandler(const std::string& directive, const TDirectiveHandler& handler) TCPP_NOEXCEPT;
 
-			TTokensSequence Process() TCPP_NOEXCEPT;
-			static std::string ToString(const TTokensSequence& tokens) TCPP_NOEXCEPT;
+			TPreprocessResult Process() TCPP_NOEXCEPT;
+			static std::string ToString(const TPreprocessResult& tokens) TCPP_NOEXCEPT;
 
 			Preprocessor& operator= (const Preprocessor&) TCPP_NOEXCEPT = delete;
 
@@ -1157,7 +1208,7 @@ namespace tcpp
 	}
 
 
-	TTokensSequence Preprocessor::Process() TCPP_NOEXCEPT
+	Preprocessor::TPreprocessResult Preprocessor::Process() TCPP_NOEXCEPT
 	{
 		TCPP_ASSERT(mpLexer);
 
@@ -1304,10 +1355,14 @@ namespace tcpp
 			}
 		}
 
+#ifdef TCPP_OUTPUT_TOKENS_EXTENSION_ENABLED
+		return TokensOutputStream{ processedTokens };
+#else
 		return processedTokens;
+#endif
 	}
 
-	std::string Preprocessor::ToString(const TTokensSequence& tokens) TCPP_NOEXCEPT
+	std::string Preprocessor::ToString(const TPreprocessResult& tokens) TCPP_NOEXCEPT
 	{
 		std::string output = EMPTY_STR_VALUE;
 		
@@ -2210,6 +2265,67 @@ namespace tcpp
 	{
 		return !mConditionalBlocksStack.empty() && (mConditionalBlocksStack.top().mShouldBeSkipped || !mConditionalBlocksStack.top().mIsParentBlockActive);
 	}
+
+
+#ifdef TCPP_OUTPUT_TOKENS_EXTENSION_ENABLED
+
+	TokensOutputStream::TokensOutputStream(TTokensSequence tokens) TCPP_NOEXCEPT
+		: mTokens(std::move(tokens)), mCurrIt(mTokens.begin())
+	{
+	}
+
+	TTokensSequenceIter TokensOutputStream::begin() TCPP_NOEXCEPT
+	{
+		return mTokens.begin();
+	}
+
+	TTokensSequenceIter TokensOutputStream::end() TCPP_NOEXCEPT
+	{
+		return mTokens.end();
+	}
+
+	TTokensSequenceConstIter TokensOutputStream::begin() const TCPP_NOEXCEPT
+	{
+		return mTokens.cbegin();
+	}
+
+	TTokensSequenceConstIter TokensOutputStream::end() const TCPP_NOEXCEPT
+	{
+		return mTokens.cend();
+	}
+
+	const TToken& TokensOutputStream::GetNextToken() TCPP_NOEXCEPT
+	{
+		if (mCurrIt == mTokens.end())
+		{
+			return mTokens.back();
+		}
+
+		return *mCurrIt++;
+	}
+
+	const TToken& TokensOutputStream::PeekNextToken(size_t offset) TCPP_NOEXCEPT
+	{
+		TTokensSequenceIter peekIt = mCurrIt + offset;
+		if (peekIt == mTokens.end())
+		{
+			return mTokens.back();
+		}
+
+		return *peekIt;
+	}
+
+	bool TokensOutputStream::HasNextToken() const TCPP_NOEXCEPT
+	{
+		return mCurrIt != mTokens.end();
+	}
+
+	const TTokensSequence& TokensOutputStream::GetSequence() const TCPP_NOEXCEPT
+	{
+		return mTokens;
+	}
+
+#endif
 
 #endif
 }

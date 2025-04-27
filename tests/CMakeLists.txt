@@ -27,10 +27,13 @@ set(SOURCES
 	"${CMAKE_CURRENT_SOURCE_DIR}/coreTests.cpp"
 	"${CMAKE_CURRENT_SOURCE_DIR}/lexerTests.cpp"
 	"${CMAKE_CURRENT_SOURCE_DIR}/stringInputStreamTests.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/tokensOutputStreamTests.cpp"
 	"${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
 
 source_group("includes" FILES ${HEADERS})
 source_group("sources" FILES ${SOURCES})
+
+add_definitions(-DTCPP_OUTPUT_TOKENS_EXTENSION_ENABLED)
 
 if (MSVC) 	#cl.exe compiler's options
 
@@ -42,7 +45,6 @@ if (MSVC) 	#cl.exe compiler's options
 	#Release compiler's options
 	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /std:c++14 /permissive- /GS /GL /analyze- /W3 /Gy /Zc:wchar_t /Zi /O2 /sdl /Zc:inline")
 	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /fp:precise /D _WINDLL /D _MBCS /errorReport:prompt /WX- /Zc:forScope /Gd /Oy- /Oi /MD /EHsc /nologo /diagnostics:classic")
-
 endif(MSVC)
 
 
